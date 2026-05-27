@@ -1,0 +1,26 @@
+export const Colors = {
+  primary: '#1B4332',
+  primaryLight: '#2D6A4F',
+  primaryDark: '#081C15',
+  accent: '#52B788',
+  accentLight: '#74C69D',
+  background: '#F8F9FA',
+  surface: '#FFFFFF',
+  textPrimary: '#212529',
+  textSecondary: '#6C757D',
+  textLight: '#ADB5BD',
+  border: '#DEE2E6',
+  error: '#DC3545',
+  warning: '#FFC107',
+  success: '#28A745',
+  info: '#17A2B8',
+  // Health status colors
+  healthy: '#28A745',
+  atRisk: '#FFC107',
+  critical: '#DC3545',
+  // Ledger colors
+  personalLedger: '#1B4332',
+  pautangLedger: '#0D6EFD',
+  ambaganLedger: '#6F42C1',
+  budgetPlanner: '#FD7E14',
+};
