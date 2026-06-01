@@ -6,10 +6,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
-import { Colors } from '../../constants/colors';
+import { useTheme } from '../../context/ThemeContext';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
+  const { colors, isDark, toggleTheme } = useTheme();
   const [profile, setProfile] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -66,6 +67,8 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const styles = makeStyles(colors);
+
   const stats = [
     { label: 'Member since', value: profile?.created_at ? new Date(profile.created_at).getFullYear().toString() : '—' },
     { label: 'Email', value: user?.email || '—' },
@@ -85,7 +88,7 @@ export default function ProfileScreen() {
             <Text style={styles.name}>{profile?.full_name || 'User'}</Text>
             <Text style={styles.email}>{user?.email}</Text>
             <TouchableOpacity style={styles.editBtn} onPress={() => setEditing(true)}>
-              <Ionicons name="pencil" size={14} color={Colors.primary} />
+              <Ionicons name="pencil" size={14} color={colors.primary} />
               <Text style={styles.editBtnText}>Edit Profile</Text>
             </TouchableOpacity>
           </>
@@ -96,12 +99,14 @@ export default function ProfileScreen() {
               value={fullName}
               onChangeText={setFullName}
               placeholder="Full name"
+              placeholderTextColor={colors.textLight}
             />
             <TextInput
               style={styles.input}
               value={phone}
               onChangeText={setPhone}
               placeholder="Phone number"
+              placeholderTextColor={colors.textLight}
               keyboardType="phone-pad"
             />
             <View style={styles.editActions}>
@@ -131,6 +136,28 @@ export default function ProfileScreen() {
         ))}
       </View>
 
+      {/* Appearance */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Appearance</Text>
+        <View style={styles.prefRow}>
+          <View style={styles.prefLeft}>
+            <Ionicons
+              name={isDark ? 'moon' : 'sunny'}
+              size={20}
+              color={colors.primary}
+              style={{ marginRight: 10 }}
+            />
+            <Text style={styles.prefLabel}>Dark Mode</Text>
+          </View>
+          <Switch
+            value={isDark}
+            onValueChange={toggleTheme}
+            trackColor={{ false: colors.border, true: colors.primary + '80' }}
+            thumbColor={isDark ? colors.primary : colors.textLight}
+          />
+        </View>
+      </View>
+
       {/* Notification Preferences */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Email Notifications</Text>
@@ -144,8 +171,8 @@ export default function ProfileScreen() {
             <Switch
               value={pref.value}
               onValueChange={pref.setter}
-              trackColor={{ false: Colors.border, true: Colors.primary + '80' }}
-              thumbColor={pref.value ? Colors.primary : Colors.textLight}
+              trackColor={{ false: colors.border, true: colors.primary + '80' }}
+              thumbColor={pref.value ? colors.primary : colors.textLight}
             />
           </View>
         ))}
@@ -172,7 +199,7 @@ export default function ProfileScreen() {
 
       {/* Sign Out */}
       <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
-        <Ionicons name="log-out-outline" size={20} color={Colors.error} />
+        <Ionicons name="log-out-outline" size={20} color={colors.error} />
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
 
@@ -181,77 +208,82 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: {
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    paddingTop: 60,
-    paddingBottom: 32,
-    paddingHorizontal: 24,
-  },
-  avatar: {
-    width: 80, height: 80, borderRadius: 40,
-    backgroundColor: Colors.accent,
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 12,
-  },
-  avatarText: { fontSize: 32, fontWeight: '800', color: '#fff' },
-  name: { fontSize: 22, fontWeight: '700', color: '#fff', marginBottom: 4 },
-  email: { fontSize: 14, color: Colors.accentLight, marginBottom: 12 },
-  editBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 8,
-    borderRadius: 20,
-  },
-  editBtnText: { fontSize: 13, color: Colors.primary, fontWeight: '600' },
-  editForm: { width: '100%', marginTop: 8 },
-  input: {
-    backgroundColor: '#fff', borderRadius: 10, padding: 12,
-    fontSize: 14, marginBottom: 10, color: Colors.textPrimary,
-  },
-  editActions: { flexDirection: 'row', gap: 10 },
-  cancelBtn: {
-    flex: 1, padding: 12, borderRadius: 10,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
-    alignItems: 'center',
-  },
-  cancelBtnText: { color: '#fff', fontWeight: '600' },
-  saveBtn: {
-    flex: 1, padding: 12, borderRadius: 10,
-    backgroundColor: Colors.accent, alignItems: 'center',
-  },
-  saveBtnText: { color: '#fff', fontWeight: '700' },
-  section: { margin: 16, marginBottom: 0 },
-  sectionTitle: {
-    fontSize: 13, fontWeight: '700', color: Colors.textSecondary,
-    textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10,
-  },
-  infoRow: {
-    backgroundColor: Colors.surface, flexDirection: 'row',
-    justifyContent: 'space-between', alignItems: 'center',
-    padding: 14, borderRadius: 10, marginBottom: 6, elevation: 1,
-  },
-  infoLabel: { fontSize: 14, color: Colors.textSecondary },
-  infoValue: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary },
-  prefRow: {
-    backgroundColor: Colors.surface, flexDirection: 'row',
-    justifyContent: 'space-between', alignItems: 'center',
-    padding: 14, borderRadius: 10, marginBottom: 6, elevation: 1,
-  },
-  prefLabel: { fontSize: 14, color: Colors.textPrimary },
-  aboutCard: {
-    backgroundColor: Colors.surface, borderRadius: 12,
-    padding: 16, elevation: 1,
-  },
-  aboutTitle: { fontSize: 15, fontWeight: '700', color: Colors.primary, marginBottom: 8 },
-  aboutText: { fontSize: 13, color: Colors.textSecondary, lineHeight: 20, marginBottom: 6 },
-  aboutSub: { fontSize: 12, color: Colors.textLight, marginTop: 4 },
-  signOutBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, margin: 16, marginTop: 20, padding: 16,
-    backgroundColor: Colors.error + '15', borderRadius: 12,
-    borderWidth: 1, borderColor: Colors.error + '30',
-  },
-  signOutText: { fontSize: 15, color: Colors.error, fontWeight: '700' },
-});
+const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext').useTheme>['colors']) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: {
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      paddingTop: 60,
+      paddingBottom: 32,
+      paddingHorizontal: 24,
+    },
+    avatar: {
+      width: 80, height: 80, borderRadius: 40,
+      backgroundColor: 'rgba(255,255,255,0.25)',
+      justifyContent: 'center', alignItems: 'center',
+      marginBottom: 12,
+      borderWidth: 2,
+      borderColor: 'rgba(255,255,255,0.5)',
+    },
+    avatarText: { fontSize: 32, fontWeight: '800', color: '#fff' },
+    name: { fontSize: 22, fontWeight: '700', color: '#fff', marginBottom: 4 },
+    email: { fontSize: 14, color: 'rgba(255,255,255,0.75)', marginBottom: 12 },
+    editBtn: {
+      flexDirection: 'row', alignItems: 'center', gap: 6,
+      backgroundColor: '#fff', paddingHorizontal: 16, paddingVertical: 8,
+      borderRadius: 20,
+    },
+    editBtnText: { fontSize: 13, color: colors.primary, fontWeight: '600' },
+    editForm: { width: '100%', marginTop: 8 },
+    input: {
+      backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: 12,
+      fontSize: 14, marginBottom: 10, color: '#fff',
+      borderWidth: 1, borderColor: 'rgba(255,255,255,0.3)',
+    },
+    editActions: { flexDirection: 'row', gap: 10 },
+    cancelBtn: {
+      flex: 1, padding: 12, borderRadius: 10,
+      borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
+      alignItems: 'center',
+    },
+    cancelBtnText: { color: '#fff', fontWeight: '600' },
+    saveBtn: {
+      flex: 1, padding: 12, borderRadius: 10,
+      backgroundColor: 'rgba(255,255,255,0.25)', alignItems: 'center',
+    },
+    saveBtnText: { color: '#fff', fontWeight: '700' },
+    section: { margin: 16, marginBottom: 0 },
+    sectionTitle: {
+      fontSize: 13, fontWeight: '700', color: colors.textSecondary,
+      textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10,
+    },
+    infoRow: {
+      backgroundColor: colors.surface, flexDirection: 'row',
+      justifyContent: 'space-between', alignItems: 'center',
+      padding: 14, borderRadius: 10, marginBottom: 6, elevation: 1,
+    },
+    infoLabel: { fontSize: 14, color: colors.textSecondary },
+    infoValue: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+    prefRow: {
+      backgroundColor: colors.surface, flexDirection: 'row',
+      justifyContent: 'space-between', alignItems: 'center',
+      padding: 14, borderRadius: 10, marginBottom: 6, elevation: 1,
+    },
+    prefLeft: { flexDirection: 'row', alignItems: 'center' },
+    prefLabel: { fontSize: 14, color: colors.textPrimary },
+    aboutCard: {
+      backgroundColor: colors.surface, borderRadius: 12,
+      padding: 16, elevation: 1,
+    },
+    aboutTitle: { fontSize: 15, fontWeight: '700', color: colors.primary, marginBottom: 8 },
+    aboutText: { fontSize: 13, color: colors.textSecondary, lineHeight: 20, marginBottom: 6 },
+    aboutSub: { fontSize: 12, color: colors.textLight, marginTop: 4 },
+    signOutBtn: {
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+      gap: 8, margin: 16, marginTop: 20, padding: 16,
+      backgroundColor: colors.error + '15', borderRadius: 12,
+      borderWidth: 1, borderColor: colors.error + '30',
+    },
+    signOutText: { fontSize: 15, color: colors.error, fontWeight: '700' },
+  });

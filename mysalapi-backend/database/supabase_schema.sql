@@ -21,6 +21,9 @@ DROP TABLE IF EXISTS public.bill_reminders CASCADE;
 DROP TABLE IF EXISTS public.personal_expenses CASCADE;
 DROP TABLE IF EXISTS public.users CASCADE;
 
+-- Drop helper function if it exists from a previous run
+DROP FUNCTION IF EXISTS public.is_group_payer(UUID);
+
 -- ============================================================
 -- USERS
 -- ============================================================
@@ -106,19 +109,19 @@ CREATE TABLE public.bill_reminders (
 -- LOANS (Ledger 2 - Pautang)
 -- ============================================================
 CREATE TABLE public.loans (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  lender_id       UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  borrower_id     UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  amount          NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  lender_id        UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  borrower_id      UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  amount           NUMERIC(12,2) NOT NULL CHECK (amount > 0),
   amount_remaining NUMERIC(12,2) NOT NULL,
-  purpose         TEXT,
-  loan_date       DATE NOT NULL DEFAULT CURRENT_DATE,
-  due_date        DATE NOT NULL,
-  payment_method  TEXT NOT NULL DEFAULT 'GCash',
-  payment_details TEXT,
-  status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','partial','paid')),
-  created_at      TIMESTAMPTZ DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ DEFAULT NOW()
+  purpose          TEXT,
+  loan_date        DATE NOT NULL DEFAULT CURRENT_DATE,
+  due_date         DATE NOT NULL,
+  payment_method   TEXT NOT NULL DEFAULT 'GCash',
+  payment_details  TEXT,
+  status           TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','partial','paid')),
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================================
@@ -225,7 +228,7 @@ ALTER TABLE public.email_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fund_sources ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.budget_allocations ENABLE ROW LEVEL SECURITY;
 
--- USERS policies
+-- ── USERS ────────────────────────────────────────────────────────────────
 CREATE POLICY "Anyone authenticated can read users"
   ON public.users FOR SELECT TO authenticated USING (true);
 CREATE POLICY "Users update own profile"
@@ -236,83 +239,121 @@ CREATE POLICY "Service role inserts users"
 CREATE POLICY "Users insert own profile"
   ON public.users FOR INSERT TO authenticated WITH CHECK (auth.uid() = id);
 
--- PERSONAL EXPENSES
-CREATE POLICY "Own expenses" ON public.personal_expenses
-  FOR ALL TO authenticated USING (auth.uid() = user_id);
+-- ── PERSONAL EXPENSES ────────────────────────────────────────────────────
+CREATE POLICY "Own expenses"
+  ON public.personal_expenses FOR ALL TO authenticated
+  USING (auth.uid() = user_id);
 
--- BILL REMINDERS
-CREATE POLICY "Own bills" ON public.bill_reminders
-  FOR ALL TO authenticated USING (auth.uid() = user_id);
+-- ── BILL REMINDERS ───────────────────────────────────────────────────────
+CREATE POLICY "Own bills"
+  ON public.bill_reminders FOR ALL TO authenticated
+  USING (auth.uid() = user_id);
 
--- LOANS
+-- ── LOANS ────────────────────────────────────────────────────────────────
 CREATE POLICY "Loans visible to lender or borrower"
   ON public.loans FOR SELECT TO authenticated
   USING (auth.uid() = lender_id OR auth.uid() = borrower_id);
 CREATE POLICY "Lender creates loans"
-  ON public.loans FOR INSERT TO authenticated WITH CHECK (auth.uid() = lender_id);
+  ON public.loans FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = lender_id);
 CREATE POLICY "Lender updates loans"
-  ON public.loans FOR UPDATE TO authenticated USING (auth.uid() = lender_id);
+  ON public.loans FOR UPDATE TO authenticated
+  USING (auth.uid() = lender_id);
 
--- LOAN PAYMENTS
+-- ── LOAN PAYMENTS ────────────────────────────────────────────────────────
 CREATE POLICY "Loan payments visible to parties"
   ON public.loan_payments FOR SELECT TO authenticated
   USING (EXISTS (
     SELECT 1 FROM public.loans l
-    WHERE l.id = loan_id AND (l.lender_id = auth.uid() OR l.borrower_id = auth.uid())
+    WHERE l.id = loan_id
+      AND (l.lender_id = auth.uid() OR l.borrower_id = auth.uid())
   ));
 CREATE POLICY "Lender records payments"
   ON public.loan_payments FOR INSERT TO authenticated
   WITH CHECK (auth.uid() = recorded_by);
 
--- GROUP EXPENSES
-CREATE POLICY "Group visible to payer or participant"
+-- ── GROUP EXPENSES ───────────────────────────────────────────────────────
+-- Split into two policies to avoid circular reference with group_participants.
+CREATE POLICY "Group visible to payer"
+  ON public.group_expenses FOR SELECT TO authenticated
+  USING (auth.uid() = payer_id);
+
+CREATE POLICY "Group visible to participant"
   ON public.group_expenses FOR SELECT TO authenticated
   USING (
-    auth.uid() = payer_id OR
-    EXISTS (SELECT 1 FROM public.group_participants gp WHERE gp.group_expense_id = id AND gp.participant_id = auth.uid())
+    EXISTS (
+      SELECT 1 FROM public.group_participants gp
+      WHERE gp.group_expense_id = public.group_expenses.id
+        AND gp.participant_id = auth.uid()
+    )
   );
-CREATE POLICY "Payer creates group"
-  ON public.group_expenses FOR INSERT TO authenticated WITH CHECK (auth.uid() = payer_id);
-CREATE POLICY "Payer updates group"
-  ON public.group_expenses FOR UPDATE TO authenticated USING (auth.uid() = payer_id);
 
--- GROUP PARTICIPANTS
-CREATE POLICY "Participants visible to group members"
-  ON public.group_participants FOR SELECT TO authenticated
-  USING (EXISTS (
+CREATE POLICY "Payer creates group"
+  ON public.group_expenses FOR INSERT TO authenticated
+  WITH CHECK (auth.uid() = payer_id);
+
+CREATE POLICY "Payer updates group"
+  ON public.group_expenses FOR UPDATE TO authenticated
+  USING (auth.uid() = payer_id);
+
+-- ── HELPER FUNCTION (breaks RLS recursion) ───────────────────────────────
+-- Checks if the calling user is the payer of a group expense.
+-- SECURITY DEFINER bypasses RLS on group_expenses so there is no
+-- circular reference when group_participants policies call this.
+CREATE OR REPLACE FUNCTION public.is_group_payer(p_group_expense_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
     SELECT 1 FROM public.group_expenses ge
-    WHERE ge.id = group_expense_id AND (ge.payer_id = auth.uid() OR participant_id = auth.uid())
-  ));
+    WHERE ge.id = p_group_expense_id
+      AND ge.payer_id = auth.uid()
+  );
+$$;
+
+-- ── GROUP PARTICIPANTS ───────────────────────────────────────────────────
+-- Uses is_group_payer() to avoid circular RLS reference.
+CREATE POLICY "Participant sees own row"
+  ON public.group_participants FOR SELECT TO authenticated
+  USING (participant_id = auth.uid());
+
+CREATE POLICY "Payer sees all participants"
+  ON public.group_participants FOR SELECT TO authenticated
+  USING (public.is_group_payer(group_expense_id));
+
 CREATE POLICY "Payer adds participants"
   ON public.group_participants FOR INSERT TO authenticated
-  WITH CHECK (EXISTS (
-    SELECT 1 FROM public.group_expenses ge WHERE ge.id = group_expense_id AND ge.payer_id = auth.uid()
-  ));
+  WITH CHECK (public.is_group_payer(group_expense_id));
+
 CREATE POLICY "Payer updates participants"
   ON public.group_participants FOR UPDATE TO authenticated
-  USING (EXISTS (
-    SELECT 1 FROM public.group_expenses ge WHERE ge.id = group_expense_id AND ge.payer_id = auth.uid()
-  ));
+  USING (public.is_group_payer(group_expense_id));
 
--- EMAIL NOTIFICATIONS
+-- ── EMAIL NOTIFICATIONS ──────────────────────────────────────────────────
 CREATE POLICY "Anyone authenticated can manage notifications"
   ON public.email_notifications FOR ALL TO authenticated USING (true);
 
--- FUND SOURCES
+-- ── FUND SOURCES ─────────────────────────────────────────────────────────
 CREATE POLICY "Own fund sources"
-  ON public.fund_sources FOR ALL TO authenticated USING (auth.uid() = user_id);
+  ON public.fund_sources FOR ALL TO authenticated
+  USING (auth.uid() = user_id);
 
--- BUDGET ALLOCATIONS
+-- ── BUDGET ALLOCATIONS ───────────────────────────────────────────────────
 CREATE POLICY "Own allocations"
-  ON public.budget_allocations FOR ALL TO authenticated USING (auth.uid() = user_id);
+  ON public.budget_allocations FOR ALL TO authenticated
+  USING (auth.uid() = user_id);
 
 -- ============================================================
 -- VERIFY
 -- ============================================================
-SELECT 'users' as table_name, count(*) FROM public.users
-UNION ALL SELECT 'personal_expenses', count(*) FROM public.personal_expenses
-UNION ALL SELECT 'bill_reminders', count(*) FROM public.bill_reminders
-UNION ALL SELECT 'loans', count(*) FROM public.loans
-UNION ALL SELECT 'group_expenses', count(*) FROM public.group_expenses
-UNION ALL SELECT 'fund_sources', count(*) FROM public.fund_sources
-UNION ALL SELECT 'email_notifications', count(*) FROM public.email_notifications;
+SELECT 'users'              AS table_name, count(*) FROM public.users
+UNION ALL SELECT 'personal_expenses',      count(*) FROM public.personal_expenses
+UNION ALL SELECT 'bill_reminders',         count(*) FROM public.bill_reminders
+UNION ALL SELECT 'loans',                  count(*) FROM public.loans
+UNION ALL SELECT 'group_expenses',         count(*) FROM public.group_expenses
+UNION ALL SELECT 'group_participants',     count(*) FROM public.group_participants
+UNION ALL SELECT 'fund_sources',           count(*) FROM public.fund_sources
+UNION ALL SELECT 'email_notifications',    count(*) FROM public.email_notifications
+UNION ALL SELECT 'budget_allocations',     count(*) FROM public.budget_allocations;

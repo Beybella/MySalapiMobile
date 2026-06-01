@@ -25,16 +25,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Keep a ref so AppState listener always sees the latest session value
+  const sessionRef = useRef<Session | null>(null);
 
   const signOut = async () => {
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     await supabase.auth.signOut();
     setSession(null);
+    sessionRef.current = null;
   };
 
   const resetInactivityTimer = useCallback(() => {
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     inactivityTimer.current = setTimeout(() => {
-      // Auto sign out after 15 minutes of inactivity
       signOut();
     }, INACTIVITY_TIMEOUT_MS);
   }, []);
@@ -45,28 +48,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!resolved) { resolved = true; setLoading(false); }
     }, 5000);
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
       if (!resolved) {
         resolved = true;
         clearTimeout(timeout);
-        setSession(session);
+        setSession(s);
+        sessionRef.current = s;
         setLoading(false);
-        if (session) resetInactivityTimer();
+        if (s) resetInactivityTimer();
       }
     }).catch(() => {
       if (!resolved) { resolved = true; clearTimeout(timeout); setLoading(false); }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+      setSession(s);
+      sessionRef.current = s;
       setLoading(false);
-      if (session) resetInactivityTimer();
-      else if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      if (s) {
+        resetInactivityTimer();
+      } else {
+        if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
+      }
     });
 
-    // Reset timer when app comes to foreground
+    // Use sessionRef so this always sees the current session, not the stale closure value
     const appStateSub = AppState.addEventListener('change', (state: AppStateStatus) => {
-      if (state === 'active' && session) resetInactivityTimer();
+      if (state === 'active' && sessionRef.current) {
+        resetInactivityTimer();
+      }
     });
 
     return () => {

@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, Modal,
-  ScrollView,
+  View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
-import { format, getDaysInMonth, getYear, getMonth } from 'date-fns';
+import { useTheme } from '../context/ThemeContext';
+import { format, getDaysInMonth } from 'date-fns';
 
 interface DateInputProps {
   label: string;
@@ -17,6 +16,7 @@ interface DateInputProps {
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 export default function DateInput({ label, value, onChange, minDate }: DateInputProps) {
+  const { colors } = useTheme();
   const [open, setOpen] = useState(false);
 
   const parsed = value ? new Date(value + 'T00:00:00') : new Date();
@@ -35,18 +35,15 @@ export default function DateInput({ label, value, onChange, minDate }: DateInput
     setOpen(false);
   };
 
-  const displayValue = value
-    ? format(new Date(value + 'T00:00:00'), 'MMMM d, yyyy')
-    : 'Select date';
+  const displayValue = value ? format(new Date(value + 'T00:00:00'), 'MMMM d, yyyy') : 'Select date';
+  const styles = makeStyles(colors);
 
   return (
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
       <TouchableOpacity style={styles.input} onPress={() => setOpen(true)}>
-        <Text style={[styles.inputText, !value && styles.placeholder]}>
-          {displayValue}
-        </Text>
-        <Ionicons name="calendar-outline" size={18} color={Colors.textSecondary} />
+        <Text style={[styles.inputText, !value && styles.placeholder]}>{displayValue}</Text>
+        <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
       </TouchableOpacity>
 
       <Modal visible={open} transparent animationType="slide">
@@ -54,43 +51,28 @@ export default function DateInput({ label, value, onChange, minDate }: DateInput
           <View style={styles.picker}>
             <Text style={styles.pickerTitle}>{label}</Text>
 
-            {/* Year */}
             <Text style={styles.sectionLabel}>Year</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>
               {years.map((y) => (
-                <TouchableOpacity
-                  key={y}
-                  style={[styles.chip, year === y && styles.chipActive]}
-                  onPress={() => { setYear(y); setDay(Math.min(day, getDaysInMonth(new Date(y, month)))); }}
-                >
+                <TouchableOpacity key={y} style={[styles.chip, year === y && styles.chipActive]} onPress={() => { setYear(y); setDay(Math.min(day, getDaysInMonth(new Date(y, month)))); }}>
                   <Text style={[styles.chipText, year === y && styles.chipTextActive]}>{y}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            {/* Month */}
             <Text style={styles.sectionLabel}>Month</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>
               {MONTHS.map((m, i) => (
-                <TouchableOpacity
-                  key={m}
-                  style={[styles.chip, month === i && styles.chipActive]}
-                  onPress={() => { setMonth(i); setDay(Math.min(day, getDaysInMonth(new Date(year, i)))); }}
-                >
+                <TouchableOpacity key={m} style={[styles.chip, month === i && styles.chipActive]} onPress={() => { setMonth(i); setDay(Math.min(day, getDaysInMonth(new Date(year, i)))); }}>
                   <Text style={[styles.chipText, month === i && styles.chipTextActive]}>{m}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
-            {/* Day */}
             <Text style={styles.sectionLabel}>Day</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>
               {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => (
-                <TouchableOpacity
-                  key={d}
-                  style={[styles.chip, day === d && styles.chipActive]}
-                  onPress={() => setDay(d)}
-                >
+                <TouchableOpacity key={d} style={[styles.chip, day === d && styles.chipActive]} onPress={() => setDay(d)}>
                   <Text style={[styles.chipText, day === d && styles.chipTextActive]}>{d}</Text>
                 </TouchableOpacity>
               ))}
@@ -111,41 +93,25 @@ export default function DateInput({ label, value, onChange, minDate }: DateInput
   );
 }
 
-const styles = StyleSheet.create({
-  container: { marginBottom: 12 },
-  label: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginBottom: 6 },
-  input: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderWidth: 1, borderColor: Colors.border, borderRadius: 10,
-    padding: 14, backgroundColor: Colors.surface,
-  },
-  inputText: { fontSize: 14, color: Colors.textPrimary },
-  placeholder: { color: Colors.textLight },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  picker: {
-    backgroundColor: Colors.surface, borderTopLeftRadius: 20,
-    borderTopRightRadius: 20, padding: 24, paddingBottom: 36,
-  },
-  pickerTitle: { fontSize: 17, fontWeight: '700', color: Colors.textPrimary, marginBottom: 16 },
-  sectionLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary, marginBottom: 8, textTransform: 'uppercase' },
-  row: { marginBottom: 16 },
-  chip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    borderWidth: 1, borderColor: Colors.border, marginRight: 8,
-    backgroundColor: Colors.background,
-  },
-  chipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  chipText: { fontSize: 14, color: Colors.textSecondary },
-  chipTextActive: { color: '#fff', fontWeight: '700' },
-  actions: { flexDirection: 'row', gap: 12, marginTop: 8 },
-  cancelBtn: {
-    flex: 1, padding: 14, borderRadius: 10,
-    borderWidth: 1, borderColor: Colors.border, alignItems: 'center',
-  },
-  cancelText: { color: Colors.textSecondary, fontWeight: '600' },
-  confirmBtn: {
-    flex: 1, padding: 14, borderRadius: 10,
-    backgroundColor: Colors.primary, alignItems: 'center',
-  },
-  confirmText: { color: '#fff', fontWeight: '700' },
-});
+const makeStyles = (colors: ReturnType<typeof import('../context/ThemeContext').useTheme>['colors']) =>
+  StyleSheet.create({
+    container: { marginBottom: 12 },
+    label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+    input: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 14, backgroundColor: colors.surface },
+    inputText: { fontSize: 14, color: colors.textPrimary },
+    placeholder: { color: colors.textLight },
+    overlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
+    picker: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24, paddingBottom: 36 },
+    pickerTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary, marginBottom: 16 },
+    sectionLabel: { fontSize: 12, fontWeight: '600', color: colors.textSecondary, marginBottom: 8, textTransform: 'uppercase' },
+    row: { marginBottom: 16 },
+    chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: colors.border, marginRight: 8, backgroundColor: colors.background },
+    chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+    chipText: { fontSize: 14, color: colors.textSecondary },
+    chipTextActive: { color: '#fff', fontWeight: '700' },
+    actions: { flexDirection: 'row', gap: 12, marginTop: 8 },
+    cancelBtn: { flex: 1, padding: 14, borderRadius: 10, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
+    cancelText: { color: colors.textSecondary, fontWeight: '600' },
+    confirmBtn: { flex: 1, padding: 14, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center' },
+    confirmText: { color: '#fff', fontWeight: '700' },
+  });

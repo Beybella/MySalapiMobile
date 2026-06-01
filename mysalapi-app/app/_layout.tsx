@@ -3,32 +3,27 @@ import { View, ActivityIndicator } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { PaperProvider } from 'react-native-paper';
 import { AuthProvider, useAuth } from '../context/AuthContext';
-import { Colors } from '../constants/colors';
+import { ThemeProvider, useTheme } from '../context/ThemeContext';
 
 function RootLayoutNav() {
   const { session, loading } = useAuth();
+  const { colors } = useTheme();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    // Don't navigate until auth state is resolved
     if (loading) return;
-
     const inAuthGroup = segments[0] === '(auth)';
-
     if (!session && !inAuthGroup) {
-      // Not logged in — go to login
       router.replace('/(auth)/login');
     } else if (session && inAuthGroup) {
-      // Logged in but on auth screen — go to app
       router.replace('/(tabs)');
     }
   }, [session, loading, segments]);
 
-  // Show a spinner while Supabase resolves the session
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.primary }}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.primary }}>
         <ActivityIndicator size="large" color="#fff" />
       </View>
     );
@@ -48,10 +43,12 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <PaperProvider>
-        <RootLayoutNav />
-      </PaperProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <PaperProvider>
+          <RootLayoutNav />
+        </PaperProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

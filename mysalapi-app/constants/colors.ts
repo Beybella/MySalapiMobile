@@ -1,26 +1,83 @@
-export const Colors = {
-  primary: '#1B4332',
-  primaryLight: '#2D6A4F',
-  primaryDark: '#081C15',
-  accent: '#52B788',
-  accentLight: '#74C69D',
-  background: '#F8F9FA',
+// Lush Island Oasis Color Strategy
+export const LightColors = {
+  // Backgrounds
+  background: '#F3FDFB',
   surface: '#FFFFFF',
-  textPrimary: '#212529',
-  textSecondary: '#6C757D',
-  textLight: '#ADB5BD',
-  border: '#DEE2E6',
+
+  // Accents
+  primary: '#32A08E',
+  primaryDark: '#2a8878',
+  secondary: '#50E3C2',
+
+  // Text
+  textPrimary: '#1A2B28',
+  textSecondary: '#4a6b65',
+  textLight: '#8aada8',
+
+  // Borders & misc
+  border: '#d0ece8',
+  highlight: '#D9BF77',
+
+  // Status
   error: '#DC3545',
-  warning: '#FFC107',
-  success: '#28A745',
-  info: '#17A2B8',
-  // Health status colors
-  healthy: '#28A745',
-  atRisk: '#FFC107',
+  warning: '#D9BF77',
+  success: '#32A08E',
+  info: '#50E3C2',
+
+  // Health status
+  healthy: '#32A08E',
+  atRisk: '#D9BF77',
   critical: '#DC3545',
-  // Ledger colors
-  personalLedger: '#1B4332',
-  pautangLedger: '#0D6EFD',
-  ambaganLedger: '#6F42C1',
-  budgetPlanner: '#FD7E14',
+
+  // Ledger accent colors (kept distinct per ledger)
+  personalLedger: '#32A08E',
+  pautangLedger: '#5B8DB8',
+  ambaganLedger: '#8B72BE',
+  budgetPlanner: '#C9A84C',
+
+  // Overlay
+  overlay: 'rgba(26,43,40,0.5)',
 };
+
+export const DarkColors = {
+  // Backgrounds
+  background: '#121C1A',
+  surface: '#1E2F2C',
+
+  // Accents
+  primary: '#50E3C2',
+  primaryDark: '#32A08E',
+  secondary: '#32A08E',
+
+  // Text
+  textPrimary: '#F3FDFB',
+  textSecondary: '#9ecec8',
+  textLight: '#5a8a84',
+
+  // Borders & misc
+  border: '#2a4440',
+  highlight: '#D9BF77',
+
+  // Status
+  error: '#ff6b7a',
+  warning: '#D9BF77',
+  success: '#50E3C2',
+  info: '#50E3C2',
+
+  // Health status
+  healthy: '#50E3C2',
+  atRisk: '#D9BF77',
+  critical: '#ff6b7a',
+
+  // Ledger accent colors
+  personalLedger: '#50E3C2',
+  pautangLedger: '#7aafd4',
+  ambaganLedger: '#a98ee0',
+  budgetPlanner: '#D9BF77',
+
+  // Overlay
+  overlay: 'rgba(0,0,0,0.7)',
+};
+
+// Default export kept for backward compat — will be overridden by theme context
+export const Colors = LightColors;
