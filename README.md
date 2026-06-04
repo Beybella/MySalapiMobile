@@ -69,7 +69,11 @@ EXPO_PUBLIC_API_URL=http://localhost:8000/api
 ### mysalapi-backend/.env (already configured)
 ```
 SUPABASE_URL=https://afqsmrwbwnnldpjouhxb.supabase.co
-RESEND_API_KEY=re_hNg37TYT_Dps1KPqs99uABBBes2aF9tKp
+SUPABASE_ANON_KEY=<your anon key>
+SUPABASE_SERVICE_KEY=<your service key>
+BREVO_API_KEY=<your brevo api key>
+MAIL_FROM_ADDRESS=noreply@mysalapi.app
+MAIL_FROM_NAME=MySalapi
 ```
 
 ---
@@ -90,6 +94,8 @@ RESEND_API_KEY=re_hNg37TYT_Dps1KPqs99uABBBes2aF9tKp
 | Shortfall detection & warnings | ✅ |
 | Budget health status (Healthy/At Risk/Critical) | ✅ |
 | Budget recommendations | ✅ |
-| Laravel API + Resend email service | ✅ |
+| Laravel API + Brevo email service | ✅ |
 | Daily cron for bill reminders | ✅ |
+| Daily cron for overdue loan notifications | ✅ |
 | PostgreSQL RLS security | ✅ |
+| Email notification tracking | ✅ |
