@@ -23,9 +23,13 @@ THESIS 3RD YEAR/
 
 ```bash
 cd mysalapi-backend
-php artisan serve
+php artisan serve --host=0.0.0.0 --port=8000
 ```
-Backend runs at: http://localhost:8000
+
+> **Important:** You must use `--host=0.0.0.0` so your phone can reach the server over WiFi.
+> Using just `php artisan serve` binds to `127.0.0.1` (localhost only) — your phone cannot connect to that.
+
+Backend runs at: http://localhost:8000 (from PC) or http://YOUR_PC_IP:8000 (from phone)
 Test it: http://localhost:8000/api/health
 
 ---

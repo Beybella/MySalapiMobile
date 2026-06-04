@@ -5,12 +5,12 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Http;
-use App\Services\ResendService;
+use App\Services\BrevoService;
 use Carbon\Carbon;
 
 class BudgetController extends Controller
 {
-    public function __construct(private ResendService $resend) {}
+    public function __construct(private BrevoService $brevo) {}
 
     /**
      * POST /api/cron/daily
@@ -102,13 +102,13 @@ class BudgetController extends Controller
             $notifId = $notifResp->json()[0]['id'] ?? null;
 
             // Send email
-            $html   = $this->resend->buildBillReminderHtml([
+            $html   = $this->brevo->buildBillReminderHtml([
                 'title'     => $bill['title'],
                 'amount'    => $bill['amount'],
                 'due_date'  => $bill['due_date'],
                 'days_left' => max(0, (int) $daysLeft),
             ]);
-            $result = $this->resend->send($userEmail, "Bill Reminder: {$bill['title']}", $html);
+            $result = $this->brevo->send($userEmail, "Bill Reminder: {$bill['title']}", $html);
 
             // Update notification status
             if ($notifId) {
@@ -176,7 +176,7 @@ class BudgetController extends Controller
             if (!empty($existing->json())) continue;
 
             // Send Singil to borrower
-            $html   = $this->resend->buildSingilHtml([
+            $html   = $this->brevo->buildSingilHtml([
                 'lender_name'    => $lender['full_name'] ?? $lender['email'],
                 'amount'         => $loan['amount_remaining'],
                 'purpose'        => $loan['purpose'],
@@ -184,7 +184,7 @@ class BudgetController extends Controller
                 'payment_method' => $loan['payment_method'],
                 'payment_details'=> $loan['payment_details'],
             ]);
-            $result = $this->resend->send(
+            $result = $this->brevo->send(
                 $borrower['email'],
                 "OVERDUE: Payment due to {$lender['full_name']}",
                 $html
@@ -207,3 +207,4 @@ class BudgetController extends Controller
         return response()->json(['sent' => $sent]);
     }
 }
+

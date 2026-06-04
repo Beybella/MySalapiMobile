@@ -4,12 +4,12 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use App\Services\ResendService;
+use App\Services\BrevoService;
 use Illuminate\Support\Facades\Http;
 
 class EmailController extends Controller
 {
-    public function __construct(private ResendService $resend) {}
+    public function __construct(private BrevoService $brevo) {}
 
     /**
      * POST /api/email/singil
@@ -28,8 +28,8 @@ class EmailController extends Controller
             'notification_id'  => 'nullable|uuid',
         ]);
 
-        $html   = $this->resend->buildSingilHtml($data);
-        $result = $this->resend->send(
+        $html   = $this->brevo->buildSingilHtml($data);
+        $result = $this->brevo->send(
             $data['recipient_email'],
             "Payment Reminder from {$data['lender_name']} via MySalapi",
             $html
@@ -55,8 +55,8 @@ class EmailController extends Controller
             'notification_id'  => 'nullable|uuid',
         ]);
 
-        $html   = $this->resend->buildBillReminderHtml($data);
-        $result = $this->resend->send(
+        $html   = $this->brevo->buildBillReminderHtml($data);
+        $result = $this->brevo->send(
             $data['recipient_email'],
             "Bill Reminder: {$data['title']} due {$data['due_date']}",
             $html
@@ -83,8 +83,8 @@ class EmailController extends Controller
             'notification_id'  => 'nullable|uuid',
         ]);
 
-        $html   = $this->resend->buildShortfallHtml($data);
-        $result = $this->resend->send(
+        $html   = $this->brevo->buildShortfallHtml($data);
+        $result = $this->brevo->send(
             $data['recipient_email'],
             'MySalapi — Budget Shortfall Alert',
             $html
@@ -142,7 +142,7 @@ class EmailController extends Controller
         </div></body></html>
         HTML;
 
-        $result = $this->resend->send(
+        $result = $this->brevo->send(
             $data['recipient_email'],
             "Group Expense Reminder: {$title} — ₱{$amount}",
             $html
@@ -163,14 +163,24 @@ class EmailController extends Controller
         $supabaseUrl = env('SUPABASE_URL');
         $serviceKey  = env('SUPABASE_SERVICE_KEY') ?: env('SUPABASE_ANON_KEY');
 
-        Http::withHeaders([
-            'apikey'        => $serviceKey,
-            'Authorization' => "Bearer {$serviceKey}",
-            'Content-Type'  => 'application/json',
-        ])->patch("{$supabaseUrl}/rest/v1/email_notifications?id=eq.{$notificationId}", [
-            'status'        => $result['success'] ? 'sent' : 'failed',
-            'error_message' => $result['error'] ?? null,
-            'sent_at'       => $result['success'] ? now()->toISOString() : null,
-        ]);
+        if (!$supabaseUrl || !$serviceKey) {
+            \Illuminate\Support\Facades\Log::warning('updateNotificationStatus: SUPABASE_URL or key not set in .env');
+            return;
+        }
+
+        try {
+            Http::withHeaders([
+                'apikey'        => $serviceKey,
+                'Authorization' => "Bearer {$serviceKey}",
+                'Content-Type'  => 'application/json',
+            ])->patch("{$supabaseUrl}/rest/v1/email_notifications?id=eq.{$notificationId}", [
+                'status'        => $result['success'] ? 'sent' : 'failed',
+                'error_message' => $result['error'] ?? null,
+                'sent_at'       => $result['success'] ? now()->toISOString() : null,
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::warning('updateNotificationStatus failed: ' . $e->getMessage());
+        }
     }
 }
+

@@ -141,16 +141,18 @@ CREATE TABLE public.loan_payments (
 -- GROUP EXPENSES (Ledger 3 - Ambagan)
 -- ============================================================
 CREATE TABLE public.group_expenses (
-  id           UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  payer_id     UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  title        TEXT NOT NULL,
-  total_amount NUMERIC(12,2) NOT NULL CHECK (total_amount > 0),
-  expense_date DATE NOT NULL DEFAULT CURRENT_DATE,
-  category     TEXT NOT NULL DEFAULT 'Others',
-  split_method TEXT NOT NULL DEFAULT 'equal' CHECK (split_method IN ('equal','custom')),
-  status       TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','settled')),
-  created_at   TIMESTAMPTZ DEFAULT NOW(),
-  updated_at   TIMESTAMPTZ DEFAULT NOW()
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  payer_id       UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  title          TEXT NOT NULL,
+  total_amount   NUMERIC(12,2) NOT NULL CHECK (total_amount > 0),
+  expense_date   DATE NOT NULL DEFAULT CURRENT_DATE,
+  category       TEXT NOT NULL DEFAULT 'Others',
+  split_method   TEXT NOT NULL DEFAULT 'equal' CHECK (split_method IN ('equal','custom')),
+  status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','settled')),
+  payment_method TEXT NOT NULL DEFAULT 'GCash',
+  payment_details TEXT,
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================================
