@@ -80,11 +80,15 @@ export default function PautangScreen() {
     loadData();
   };
 
+  const [sendingSingil, setSendingSingil] = React.useState<string | null>(null);
+
   const sendSingilEmail = async (loan: any) => {
     Alert.alert('Send Singil', `Send a debt collection email to ${loan.borrower?.email || loan.lender?.email}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Send', onPress: async () => {
+          if (sendingSingil === loan.id) return; // prevent double-send
+          setSendingSingil(loan.id);
           const { data: lenderProfile } = await supabase.from('users').select('full_name, email').eq('id', user!.id).single();
           const { data: notif } = await supabase.from('email_notifications').insert({
             recipient_email: loan.borrower?.email,
@@ -98,6 +102,7 @@ export default function PautangScreen() {
             due_date: loan.due_date, payment_method: loan.payment_method,
             payment_details: loan.payment_details, notification_id: notif?.id,
           });
+          setSendingSingil(null);
           Alert.alert(result.success ? 'Sent!' : 'Failed', result.success ? 'Singil email has been sent to the borrower.' : (result.error ?? 'Could not send email.'));
         },
       },
@@ -141,9 +146,15 @@ export default function PautangScreen() {
               </TouchableOpacity>
             )}
             {isGiven && (
-              <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.secondary + '25' }]} onPress={() => sendSingilEmail(loan)}>
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: colors.secondary + '25' }, sendingSingil === loan.id && { opacity: 0.5 }]}
+                onPress={() => sendSingil === loan.id ? null : sendSingilEmail(loan)}
+                disabled={sendingSingil === loan.id}
+              >
                 <Ionicons name="mail-outline" size={16} color={colors.secondary} />
-                <Text style={[styles.actionBtnText, { color: colors.secondary }]}>Singil</Text>
+                <Text style={[styles.actionBtnText, { color: colors.secondary }]}>
+                  {sendingSingil === loan.id ? 'Sending...' : 'Singil'}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -250,25 +261,25 @@ export default function PautangScreen() {
 const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext').useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { backgroundColor: colors.pautangLedger, padding: 24, paddingTop: 56 },
+    header: { backgroundColor: colors.pautangLedger, padding: 24, paddingTop: 56, paddingBottom: 20 },
     headerTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
-    headerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 14, marginTop: 4 },
+    headerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 14, marginTop: 6 },
     tabs: { flexDirection: 'row', backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-    tab: { flex: 1, padding: 14, alignItems: 'center' },
+    tab: { flex: 1, padding: 16, alignItems: 'center' },
     tabActive: { borderBottomWidth: 2, borderBottomColor: colors.pautangLedger },
     tabText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
     tabTextActive: { color: colors.pautangLedger },
-    list: { flex: 1, padding: 12 },
-    emptyText: { textAlign: 'center', color: colors.textLight, padding: 32, fontSize: 14 },
-    loanCard: { backgroundColor: colors.surface, borderRadius: 12, padding: 16, marginBottom: 10, elevation: 1 },
+    list: { flex: 1, padding: 16 },
+    emptyText: { textAlign: 'center', color: colors.textLight, padding: 40, fontSize: 14 },
+    loanCard: { backgroundColor: colors.surface, borderRadius: 14, padding: 18, marginBottom: 12, elevation: 1 },
     loanOverdue: { borderLeftWidth: 3, borderLeftColor: colors.error },
-    loanHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+    loanHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
     loanName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-    loanPurpose: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-    statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+    loanPurpose: { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
+    statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
     statusText: { fontSize: 12, fontWeight: '700' },
-    loanAmounts: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-    amountLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 2 },
+    loanAmounts: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
+    amountLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 4 },
     amountValue: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
     loanActions: { flexDirection: 'row', gap: 8 },
     actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary + '20', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },

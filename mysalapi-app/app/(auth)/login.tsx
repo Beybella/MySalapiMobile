@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView, Alert,
+  KeyboardAvoidingView, Platform, ScrollView, Alert, Image,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -57,7 +57,11 @@ export default function LoginScreen() {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={styles.logo}>MySalapi</Text>
+          <Image
+            source={require('../../assets/MySalapiLogo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
           <Text style={styles.tagline}>Your personal finance tracker</Text>
         </View>
 
@@ -113,8 +117,8 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     container: { flex: 1, backgroundColor: colors.primary },
     scroll: { flexGrow: 1 },
     header: { alignItems: 'center', paddingTop: 80, paddingBottom: 40 },
-    logo: { fontSize: 38, fontWeight: '800', color: '#fff', letterSpacing: 1 },
-    tagline: { fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 6 },
+    logo: { width: 140, height: 140, marginBottom: 8 },
+    tagline: { fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 4 },
     form: {
       flex: 1, backgroundColor: colors.background,
       borderTopLeftRadius: 30, borderTopRightRadius: 30,

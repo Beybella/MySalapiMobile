@@ -32,14 +32,18 @@ export default function LoanDetailScreen() {
   const isLender = loan?.lender_id === user?.id;
   const isOverdue = loan && loan.status !== 'paid' && loan.due_date && isPast(new Date(loan.due_date));
 
+  const [sendingLoanSingil, setSendingLoanSingil] = useState(false);
+
   const handleSingil = async () => {
-    if (!loan) return;
+    if (!loan || sendingLoanSingil) return;
     Alert.alert('Send Singil', `Send a payment reminder to ${loan.borrower?.email}?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Send', onPress: async () => {
+        setSendingLoanSingil(true);
         const { data: lenderProfile } = await supabase.from('users').select('full_name, email').eq('id', user!.id).single();
         const { data: notif } = await supabase.from('email_notifications').insert({ recipient_email: loan.borrower?.email, subject_email: `Payment Reminder: ₱${loan.amount_remaining}`, notification_type: 'singil', subject_cost_id: loan.id, status: 'pending' }).select().single();
         const result = await sendSingil({ recipient_email: loan.borrower?.email, lender_name: lenderProfile?.full_name || lenderProfile?.email || 'Your lender', amount: Number(loan.amount_remaining), purpose: loan.purpose, due_date: loan.due_date, payment_method: loan.payment_method, payment_details: loan.payment_details, notification_id: notif?.id });
+        setSendingLoanSingil(false);
         Alert.alert(result.success ? 'Sent!' : 'Failed', result.success ? 'Singil email sent to borrower.' : (result.error ?? 'Could not send email.'));
       }},
     ]);
@@ -106,9 +110,13 @@ export default function LoanDetailScreen() {
               <Ionicons name="cash-outline" size={18} color="#fff" />
               <Text style={styles.actionBtnText}>Record Payment</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.secondary }]} onPress={handleSingil}>
+            <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: colors.secondary }, sendingLoanSingil && { opacity: 0.6 }]}
+                onPress={handleSingil}
+                disabled={sendingLoanSingil}
+              >
               <Ionicons name="mail-outline" size={18} color="#fff" />
-              <Text style={styles.actionBtnText}>Send Singil</Text>
+              <Text style={styles.actionBtnText}>{sendingLoanSingil ? 'Sending...' : 'Send Singil'}</Text>
             </TouchableOpacity>
           </View>
         )}

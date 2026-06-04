@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity, RefreshControl,
+  View, Text, ScrollView, StyleSheet, TouchableOpacity,
+  RefreshControl, Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +14,6 @@ interface DashboardStats {
   totalExpenses: number;
   totalLoansGiven: number;
   totalLoansOwed: number;
-  totalGroupOwed: number;
   upcomingBills: any[];
   overdueLoanCount: number;
 }
@@ -26,7 +26,6 @@ export default function HomeScreen() {
     totalExpenses: 0,
     totalLoansGiven: 0,
     totalLoansOwed: 0,
-    totalGroupOwed: 0,
     upcomingBills: [],
     overdueLoanCount: 0,
   });
@@ -37,44 +36,36 @@ export default function HomeScreen() {
     if (!user) return;
     const today = new Date().toISOString().split('T')[0];
     const in7Days = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
-    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+    const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
+      .toISOString().split('T')[0];
 
-    const { data: expenses } = await supabase
-      .from('personal_expenses').select('amount').eq('user_id', user.id).gte('expense_date', startOfMonth);
-
-    const { data: bills } = await supabase
-      .from('bill_reminders').select('*').eq('user_id', user.id).eq('is_paid', false)
-      .lte('due_date', in7Days).order('due_date', { ascending: true }).limit(5);
-
-    const { data: loansGiven } = await supabase
-      .from('loans').select('amount, amount_remaining').eq('lender_id', user.id).neq('status', 'paid');
-
-    const { data: loansOwed } = await supabase
-      .from('loans').select('amount, amount_remaining').eq('borrower_id', user.id).neq('status', 'paid');
-
-    const { data: overdueLoans } = await supabase
-      .from('loans').select('id').eq('lender_id', user.id).lt('due_date', today).neq('status', 'paid');
-
-    const { data: profile } = await supabase
-      .from('users').select('full_name').eq('id', user.id).single();
+    const [{ data: expenses }, { data: bills }, { data: loansGiven },
+           { data: loansOwed }, { data: overdueLoans }, { data: profile }] =
+      await Promise.all([
+        supabase.from('personal_expenses').select('amount').eq('user_id', user.id).gte('expense_date', startOfMonth),
+        supabase.from('bill_reminders').select('*').eq('user_id', user.id).eq('is_paid', false)
+          .lte('due_date', in7Days).order('due_date', { ascending: true }).limit(5),
+        supabase.from('loans').select('amount_remaining').eq('lender_id', user.id).neq('status', 'paid'),
+        supabase.from('loans').select('amount_remaining').eq('borrower_id', user.id).neq('status', 'paid'),
+        supabase.from('loans').select('id').eq('lender_id', user.id).lt('due_date', today).neq('status', 'paid'),
+        supabase.from('users').select('full_name').eq('id', user.id).single(),
+      ]);
 
     setUserName(profile?.full_name || user.email?.split('@')[0] || 'User');
     setStats({
       totalExpenses: expenses?.reduce((s, e) => s + Number(e.amount), 0) || 0,
       totalLoansGiven: loansGiven?.reduce((s, l) => s + Number(l.amount_remaining), 0) || 0,
       totalLoansOwed: loansOwed?.reduce((s, l) => s + Number(l.amount_remaining), 0) || 0,
-      totalGroupOwed: 0,
       upcomingBills: bills || [],
       overdueLoanCount: overdueLoans?.length || 0,
     });
   };
 
   useEffect(() => { loadDashboard(); }, [user]);
-
   const onRefresh = async () => { setRefreshing(true); await loadDashboard(); setRefreshing(false); };
 
-  const formatCurrency = (amount: number) =>
-    `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatCurrency = (n: number) =>
+    `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   const styles = makeStyles(colors);
 
@@ -82,104 +73,133 @@ export default function HomeScreen() {
     <ScrollView
       style={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      showsVerticalScrollIndicator={false}
     >
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Good day,</Text>
-          <Text style={styles.userName}>{userName}</Text>
+      {/* ── Hero Header ── */}
+      <View style={styles.hero}>
+        <View style={styles.heroTop}>
+          <View style={styles.heroLeft}>
+            <Image
+              source={require('../../assets/MySalapiLogo.png')}
+              style={styles.heroLogo}
+              resizeMode="contain"
+            />
+            <View>
+              <Text style={styles.heroGreeting}>Good day,</Text>
+              <Text style={styles.heroName}>{userName}</Text>
+            </View>
+          </View>
+          <TouchableOpacity onPress={signOut} style={styles.logoutBtn}>
+            <Ionicons name="log-out-outline" size={20} color="rgba(255,255,255,0.8)" />
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={signOut} style={styles.logoutBtn}>
-          <Ionicons name="log-out-outline" size={22} color="#fff" />
-        </TouchableOpacity>
+
+        {/* Monthly spend highlight */}
+        <View style={styles.spendCard}>
+          <Text style={styles.spendLabel}>Total Spent This Month</Text>
+          <Text style={styles.spendAmount}>{formatCurrency(stats.totalExpenses)}</Text>
+          <View style={styles.spendDivider} />
+          <View style={styles.spendRow}>
+            <View style={styles.spendItem}>
+              <Text style={styles.spendItemValue} numberOfLines={1}>{formatCurrency(stats.totalLoansGiven)}</Text>
+              <Text style={styles.spendItemLabel}>To Collect</Text>
+            </View>
+            <View style={styles.spendSep} />
+            <View style={styles.spendItem}>
+              <Text style={[styles.spendItemValue, { color: colors.error }]} numberOfLines={1}>
+                {formatCurrency(stats.totalLoansOwed)}
+              </Text>
+              <Text style={styles.spendItemLabel}>I Owe</Text>
+            </View>
+            <View style={styles.spendSep} />
+            <View style={styles.spendItem}>
+              <Text style={styles.spendItemValue}>{stats.upcomingBills.length}</Text>
+              <Text style={styles.spendItemLabel}>Bills Due</Text>
+            </View>
+          </View>
+        </View>
       </View>
 
-      {/* Alerts */}
+      {/* ── Overdue Alert ── */}
       {stats.overdueLoanCount > 0 && (
         <TouchableOpacity style={styles.alertBanner} onPress={() => router.push('/(tabs)/pautang')}>
-          <Ionicons name="warning" size={18} color="#fff" />
+          <View style={styles.alertIcon}>
+            <Ionicons name="warning" size={16} color={colors.error} />
+          </View>
           <Text style={styles.alertText}>
-            {stats.overdueLoanCount} overdue loan{stats.overdueLoanCount > 1 ? 's' : ''} — tap to view
+            {stats.overdueLoanCount} overdue loan{stats.overdueLoanCount > 1 ? 's' : ''}
           </Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.error} />
         </TouchableOpacity>
       )}
 
-      {/* Summary Cards */}
-      <View style={styles.cardsRow}>
-        <TouchableOpacity style={[styles.card, { borderTopColor: colors.personalLedger }]} onPress={() => router.push('/(tabs)/personal')}>
-          <Text style={styles.cardLabel}>This Month</Text>
-          <Text style={[styles.cardAmount, { color: colors.personalLedger }]}>{formatCurrency(stats.totalExpenses)}</Text>
-          <Text style={styles.cardSub}>Personal Expenses</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.card, { borderTopColor: colors.pautangLedger }]} onPress={() => router.push('/(tabs)/pautang')}>
-          <Text style={styles.cardLabel}>To Collect</Text>
-          <Text style={[styles.cardAmount, { color: colors.pautangLedger }]}>{formatCurrency(stats.totalLoansGiven)}</Text>
-          <Text style={styles.cardSub}>Loans Given</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.cardsRow}>
-        <TouchableOpacity style={[styles.card, { borderTopColor: colors.error }]} onPress={() => router.push('/(tabs)/pautang')}>
-          <Text style={styles.cardLabel}>I Owe</Text>
-          <Text style={[styles.cardAmount, { color: colors.error }]}>{formatCurrency(stats.totalLoansOwed)}</Text>
-          <Text style={styles.cardSub}>Loans Owed</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.card, { borderTopColor: colors.budgetPlanner }]} onPress={() => router.push('/(tabs)/budget')}>
-          <Text style={styles.cardLabel}>Budget</Text>
-          <Ionicons name="bar-chart" size={28} color={colors.budgetPlanner} />
-          <Text style={styles.cardSub}>Smart Planner</Text>
-        </TouchableOpacity>
+      {/* ── Quick Actions ── */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionsScroll}>
+          {[
+            { label: 'Expense', icon: 'wallet-outline', route: '/(tabs)/personal', color: colors.personalLedger },
+            { label: 'Loan', icon: 'people-outline', route: '/(tabs)/pautang', color: colors.pautangLedger },
+            { label: 'Ambagan', icon: 'grid-outline', route: '/(tabs)/ambagan', color: colors.ambaganLedger },
+            { label: 'Budget', icon: 'bar-chart-outline', route: '/(tabs)/budget', color: colors.budgetPlanner },
+            { label: 'Reports', icon: 'pie-chart-outline', route: '/reports', color: colors.primary },
+          ].map((action) => (
+            <TouchableOpacity
+              key={action.label}
+              style={styles.actionChip}
+              onPress={() => router.push(action.route as any)}
+            >
+              <View style={[styles.actionChipIcon, { backgroundColor: action.color + '20' }]}>
+                <Ionicons name={action.icon as any} size={22} color={action.color} />
+              </View>
+              <Text style={styles.actionChipLabel}>{action.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
-      {/* Upcoming Bills */}
+      {/* ── Upcoming Bills ── */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Upcoming Bills (7 days)</Text>
+          <Text style={styles.sectionTitle}>Upcoming Bills</Text>
           <TouchableOpacity onPress={() => router.push('/(tabs)/personal')}>
             <Text style={styles.seeAll}>See all</Text>
           </TouchableOpacity>
         </View>
+
         {stats.upcomingBills.length === 0 ? (
-          <Text style={styles.emptyText}>No upcoming bills</Text>
+          <View style={styles.emptyCard}>
+            <Ionicons name="checkmark-circle-outline" size={32} color={colors.success} />
+            <Text style={styles.emptyText}>No bills due in the next 7 days</Text>
+          </View>
         ) : (
-          stats.upcomingBills.map((bill) => (
-            <View key={bill.id} style={styles.billItem}>
-              <View style={styles.billLeft}>
-                <Ionicons name="receipt-outline" size={20} color={colors.primary} />
-                <View style={{ marginLeft: 10 }}>
+          stats.upcomingBills.map((bill, index) => {
+            const daysLeft = Math.ceil(
+              (new Date(bill.due_date).getTime() - Date.now()) / 86400000
+            );
+            const isUrgent = daysLeft <= 1;
+            return (
+              <View key={bill.id} style={[styles.billItem, index === 0 && { marginTop: 0 }]}>
+                <View style={[styles.billDot, {
+                  backgroundColor: isUrgent ? colors.error : colors.warning,
+                }]} />
+                <View style={styles.billInfo}>
                   <Text style={styles.billName}>{bill.title}</Text>
-                  <Text style={styles.billDate}>Due: {format(new Date(bill.due_date), 'MMM d, yyyy')}</Text>
+                  <Text style={styles.billDate}>
+                    {format(new Date(bill.due_date), 'MMM d, yyyy')}
+                    {isUrgent ? ' · Today' : daysLeft === 0 ? ' · Today' : ` · ${daysLeft}d left`}
+                  </Text>
                 </View>
+                <Text style={[styles.billAmount, isUrgent && { color: colors.error }]}>
+                  {formatCurrency(Number(bill.amount))}
+                </Text>
               </View>
-              <Text style={styles.billAmount}>{formatCurrency(Number(bill.amount))}</Text>
-            </View>
-          ))
+            );
+          })
         )}
       </View>
 
-      {/* Quick Actions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <View style={styles.quickActions}>
-          {[
-            { label: 'Add Expense', icon: 'add-circle', route: '/(tabs)/personal', color: colors.personalLedger },
-            { label: 'New Loan', icon: 'people', route: '/(tabs)/pautang', color: colors.pautangLedger },
-            { label: 'Group Expense', icon: 'grid', route: '/(tabs)/ambagan', color: colors.ambaganLedger },
-            { label: 'Budget Plan', icon: 'bar-chart', route: '/(tabs)/budget', color: colors.budgetPlanner },
-            { label: 'Reports', icon: 'pie-chart', route: '/reports', color: colors.primary },
-          ].map((action) => (
-            <TouchableOpacity
-              key={action.label}
-              style={styles.quickAction}
-              onPress={() => router.push(action.route as any)}
-            >
-              <View style={[styles.quickActionIcon, { backgroundColor: action.color + '25' }]}>
-                <Ionicons name={action.icon as any} size={24} color={action.color} />
-              </View>
-              <Text style={styles.quickActionLabel}>{action.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
+      <View style={{ height: 24 }} />
     </ScrollView>
   );
 }
@@ -187,42 +207,75 @@ export default function HomeScreen() {
 const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext').useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: {
-      backgroundColor: colors.primary, padding: 24, paddingTop: 56,
-      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+
+    // Hero
+    hero: { backgroundColor: colors.primary, paddingTop: 56, paddingHorizontal: 20, paddingBottom: 24 },
+    heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
+    heroLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    heroLogo: { width: 40, height: 40, borderRadius: 10 },
+    heroGreeting: { fontSize: 12, color: 'rgba(255,255,255,0.65)' },
+    heroName: { fontSize: 18, fontWeight: '700', color: '#fff' },
+    logoutBtn: { padding: 6 },
+
+    // Spend card inside hero
+    spendCard: {
+      backgroundColor: 'rgba(255,255,255,0.12)',
+      borderRadius: 16, padding: 18,
+      borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
     },
-    greeting: { color: 'rgba(255,255,255,0.75)', fontSize: 14 },
-    userName: { color: '#fff', fontSize: 22, fontWeight: '700' },
-    logoutBtn: { padding: 8 },
+    spendLabel: { fontSize: 12, color: 'rgba(255,255,255,0.65)', marginBottom: 4 },
+    spendAmount: { fontSize: 32, fontWeight: '800', color: '#fff', marginBottom: 14 },
+    spendDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginBottom: 14 },
+    spendRow: { flexDirection: 'row', alignItems: 'center' },
+    spendItem: { flex: 1, alignItems: 'center' },
+    spendItemValue: { fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 2 },
+    spendItemLabel: { fontSize: 11, color: 'rgba(255,255,255,0.6)' },
+    spendSep: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.2)' },
+
+    // Alert
     alertBanner: {
-      backgroundColor: colors.error, flexDirection: 'row', alignItems: 'center',
-      padding: 12, paddingHorizontal: 16, gap: 8,
+      flexDirection: 'row', alignItems: 'center', gap: 10,
+      marginHorizontal: 16, marginTop: 12,
+      backgroundColor: colors.error + '12',
+      borderRadius: 12, padding: 12,
+      borderWidth: 1, borderColor: colors.error + '30',
     },
-    alertText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-    cardsRow: { flexDirection: 'row', padding: 12, gap: 12 },
-    card: {
-      flex: 1, backgroundColor: colors.surface, borderRadius: 12, padding: 16,
-      borderTopWidth: 4, elevation: 2,
+    alertIcon: {
+      width: 28, height: 28, borderRadius: 14,
+      backgroundColor: colors.error + '20',
+      justifyContent: 'center', alignItems: 'center',
     },
-    cardLabel: { fontSize: 11, color: colors.textSecondary, fontWeight: '600', marginBottom: 4 },
-    cardAmount: { fontSize: 18, fontWeight: '800', color: colors.textPrimary, marginBottom: 2 },
-    cardSub: { fontSize: 11, color: colors.textLight },
-    section: { margin: 12, marginTop: 4 },
+    alertText: { flex: 1, fontSize: 13, color: colors.error, fontWeight: '600' },
+
+    // Sections
+    section: { marginHorizontal: 16, marginTop: 20 },
     sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-    sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+    sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
     seeAll: { fontSize: 13, color: colors.primary, fontWeight: '600' },
-    emptyText: { color: colors.textLight, fontSize: 14, textAlign: 'center', padding: 16 },
+
+    // Quick actions horizontal scroll
+    actionsScroll: { marginTop: 12 },
+    actionChip: { alignItems: 'center', marginRight: 16, width: 64 },
+    actionChipIcon: {
+      width: 52, height: 52, borderRadius: 16,
+      justifyContent: 'center', alignItems: 'center', marginBottom: 6,
+    },
+    actionChipLabel: { fontSize: 11, fontWeight: '600', color: colors.textSecondary, textAlign: 'center' },
+
+    // Bills
+    emptyCard: {
+      backgroundColor: colors.surface, borderRadius: 12, padding: 24,
+      alignItems: 'center', gap: 8, elevation: 1,
+    },
+    emptyText: { fontSize: 13, color: colors.textSecondary, textAlign: 'center' },
     billItem: {
-      backgroundColor: colors.surface, borderRadius: 10, padding: 14,
-      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      backgroundColor: colors.surface, borderRadius: 12, padding: 14,
+      flexDirection: 'row', alignItems: 'center', gap: 12,
       marginBottom: 8, elevation: 1,
     },
-    billLeft: { flexDirection: 'row', alignItems: 'center' },
+    billDot: { width: 8, height: 8, borderRadius: 4 },
+    billInfo: { flex: 1 },
     billName: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
     billDate: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-    billAmount: { fontSize: 15, fontWeight: '700', color: colors.primary },
-    quickActions: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-    quickAction: { width: '45%', alignItems: 'center', backgroundColor: colors.surface, borderRadius: 12, padding: 16, elevation: 1 },
-    quickActionIcon: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-    quickActionLabel: { fontSize: 12, fontWeight: '600', color: colors.textPrimary, textAlign: 'center' },
+    billAmount: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
   });

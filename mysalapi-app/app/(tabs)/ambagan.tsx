@@ -22,6 +22,7 @@ export default function AmbaganScreen() {
   const { colors } = useTheme();
   const router = useRouter();
   const [groups, setGroups] = useState<any[]>([]);
+  const [groupCounts, setGroupCounts] = useState<Record<string, { paid: number; total: number }>>({});
   const [showCreate, setShowCreate] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -30,10 +31,17 @@ export default function AmbaganScreen() {
   const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
   const [category, setCategory] = useState('Food');
   const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal');
+  const [paymentMethod, setPaymentMethod] = useState('GCash');
+  const [paymentDetails, setPaymentDetails] = useState('');
 
-  // Equal split fields
+  // Equal split — individual email rows (same UX as custom split)
   const [totalAmount, setTotalAmount] = useState('');
-  const [memberEmails, setMemberEmails] = useState('');
+  const [equalMembers, setEqualMembers] = useState<string[]>(['']);
+
+  const addEqualMember = () => setEqualMembers((prev) => [...prev, '']);
+  const removeEqualMember = (index: number) => setEqualMembers((prev) => prev.filter((_, i) => i !== index));
+  const updateEqualMember = (index: number, value: string) =>
+    setEqualMembers((prev) => prev.map((e, i) => i === index ? value : e));
 
   // Custom split fields — list of { email, amount }
   const [customMembers, setCustomMembers] = useState<CustomMember[]>([{ email: '', amount: '' }]);
@@ -41,10 +49,12 @@ export default function AmbaganScreen() {
   const resetForm = () => {
     setTitle('');
     setTotalAmount('');
-    setMemberEmails('');
     setExpenseDate(new Date().toISOString().split('T')[0]);
     setCategory('Food');
     setSplitMode('equal');
+    setPaymentMethod('GCash');
+    setPaymentDetails('');
+    setEqualMembers(['']);
     setCustomMembers([{ email: '', amount: '' }]);
   };
 
@@ -56,6 +66,23 @@ export default function AmbaganScreen() {
       .or(`payer_id.eq.${user.id}`)
       .order('created_at', { ascending: false });
     setGroups(data || []);
+
+    // Fetch participant counts for each group
+    if (data && data.length > 0) {
+      const ids = data.map((g: any) => g.id);
+      const { data: participants } = await supabase
+        .from('group_participants')
+        .select('group_expense_id, is_paid')
+        .in('group_expense_id', ids);
+
+      const counts: Record<string, { paid: number; total: number }> = {};
+      (participants || []).forEach((p: any) => {
+        if (!counts[p.group_expense_id]) counts[p.group_expense_id] = { paid: 0, total: 0 };
+        counts[p.group_expense_id].total++;
+        if (p.is_paid) counts[p.group_expense_id].paid++;
+      });
+      setGroupCounts(counts);
+    }
   };
 
   useEffect(() => { loadGroups(); }, [user]);
@@ -63,14 +90,14 @@ export default function AmbaganScreen() {
 
   // ── Equal split ──────────────────────────────────────────────────────────
   const createEqualGroup = async () => {
-    if (!title || !totalAmount || !memberEmails.trim()) {
-      Alert.alert('Error', 'Title, amount, and at least one member email are required.');
+    if (!title || !totalAmount) {
+      Alert.alert('Error', 'Title and amount are required.');
       return;
     }
     const amount = parseFloat(totalAmount);
     if (isNaN(amount) || amount <= 0) { Alert.alert('Error', 'Enter a valid amount.'); return; }
 
-    const emails = memberEmails.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+    const emails = equalMembers.map((e) => e.trim().toLowerCase()).filter(Boolean);
     if (emails.length === 0) { Alert.alert('Error', 'Add at least one member email.'); return; }
 
     const { data: memberUsers } = await supabase
@@ -86,6 +113,7 @@ export default function AmbaganScreen() {
     const { data: group, error } = await supabase.from('group_expenses').insert({
       payer_id: user!.id, title, total_amount: amount,
       expense_date: expenseDate, category, split_method: 'equal', status: 'active',
+      payment_method: paymentMethod, payment_details: paymentDetails,
     }).select().single();
     if (error || !group) { Alert.alert('Error', error?.message || 'Failed to create group.'); return; }
 
@@ -134,6 +162,7 @@ export default function AmbaganScreen() {
     const { data: group, error } = await supabase.from('group_expenses').insert({
       payer_id: user!.id, title, total_amount: totalAmt,
       expense_date: expenseDate, category, split_method: 'custom', status: 'active',
+      payment_method: paymentMethod, payment_details: paymentDetails,
     }).select().single();
     if (error || !group) { Alert.alert('Error', error?.message || 'Failed to create group.'); return; }
 
@@ -241,6 +270,21 @@ export default function AmbaganScreen() {
                   </Text>
                 </View>
               </View>
+              {/* Paid / Total indicator */}
+              {groupCounts[group.id] && (
+                <View style={styles.paidIndicatorRow}>
+                  <View style={styles.paidIndicatorBar}>
+                    <View style={[styles.paidIndicatorFill, {
+                      width: groupCounts[group.id].total > 0
+                        ? `${(groupCounts[group.id].paid / groupCounts[group.id].total) * 100}%` as any
+                        : '0%',
+                    }]} />
+                  </View>
+                  <Text style={styles.paidIndicatorText}>
+                    {groupCounts[group.id].paid}/{groupCounts[group.id].total} paid
+                  </Text>
+                </View>
+              )}
               <View style={styles.tapHint}>
                 <Ionicons name="chevron-forward" size={14} color={colors.textLight} />
                 <Text style={styles.tapHintText}>Tap to view participants</Text>
@@ -334,20 +378,67 @@ export default function AmbaganScreen() {
                     onChangeText={setTotalAmount}
                     keyboardType="decimal-pad"
                   />
-                  <Text style={styles.inputLabel}>Member Emails</Text>
-                  <TextInput
-                    style={[styles.input, { height: 72 }]}
-                    placeholder="email1@example.com, email2@example.com"
-                    placeholderTextColor={colors.textLight}
-                    value={memberEmails}
-                    onChangeText={setMemberEmails}
-                    multiline
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                  />
+
+                  <View style={styles.customHeader}>
+                    <Text style={styles.inputLabel}>Members</Text>
+                    {equalMembers.filter(Boolean).length > 0 && (
+                      <Text style={styles.customTotal}>
+                        {equalMembers.filter(Boolean).length + 1} people · {totalAmount
+                          ? `₱${(parseFloat(totalAmount) / (equalMembers.filter(Boolean).length + 1)).toFixed(2)} each`
+                          : 'each'}
+                      </Text>
+                    )}
+                  </View>
                   <Text style={styles.inputNote}>
-                    The total will be divided equally among all members including you.
+                    Each member's email. The total will be split equally among all members including you.
                   </Text>
+
+                  {equalMembers.map((email, index) => (
+                    <View key={index} style={styles.memberRow}>
+                      <TextInput
+                        style={[styles.input, styles.memberInput]}
+                        placeholder={`Member ${index + 1} email`}
+                        placeholderTextColor={colors.textLight}
+                        value={email}
+                        onChangeText={(v) => updateEqualMember(index, v)}
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                      />
+                      {equalMembers.length > 1 && (
+                        <TouchableOpacity
+                          style={styles.inlineRemoveBtn}
+                          onPress={() => removeEqualMember(index)}
+                        >
+                          <Ionicons name="trash-outline" size={16} color={colors.error} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
+
+                  <TouchableOpacity style={styles.addMemberBtn} onPress={addEqualMember}>
+                    <Ionicons name="add-circle-outline" size={18} color={colors.ambaganLedger} />
+                    <Text style={styles.addMemberText}>Add Another Member</Text>
+                  </TouchableOpacity>
+
+                  <Text style={styles.inputLabel}>Payment Method</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                    {['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'].map((m) => (
+                      <TouchableOpacity
+                        key={m}
+                        style={[styles.methodChip, paymentMethod === m && styles.methodChipActive]}
+                        onPress={() => setPaymentMethod(m)}
+                      >
+                        <Text style={[styles.methodChipText, paymentMethod === m && styles.methodChipTextActive]}>{m}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Payment details (e.g. GCash number 09XXXXXXXXX)"
+                    placeholderTextColor={colors.textLight}
+                    value={paymentDetails}
+                    onChangeText={setPaymentDetails}
+                  />
                   <TouchableOpacity
                     style={[styles.saveBtn, { backgroundColor: colors.ambaganLedger }]}
                     onPress={createEqualGroup}
@@ -373,29 +464,27 @@ export default function AmbaganScreen() {
                   </Text>
 
                   {customMembers.map((member, index) => (
-                    <View key={index} style={styles.customRow}>
-                      <View style={styles.customRowFields}>
-                        <TextInput
-                          style={[styles.input, styles.customEmailInput]}
-                          placeholder="email@example.com"
-                          placeholderTextColor={colors.textLight}
-                          value={member.email}
-                          onChangeText={(v) => updateCustomMember(index, 'email', v)}
-                          autoCapitalize="none"
-                          keyboardType="email-address"
-                        />
-                        <TextInput
-                          style={[styles.input, styles.customAmountInput]}
-                          placeholder="₱0.00"
-                          placeholderTextColor={colors.textLight}
-                          value={member.amount}
-                          onChangeText={(v) => updateCustomMember(index, 'amount', v)}
-                          keyboardType="decimal-pad"
-                        />
-                      </View>
+                    <View key={index} style={styles.memberRow}>
+                      <TextInput
+                        style={[styles.input, { flex: 2, marginBottom: 0, marginRight: 8 }]}
+                        placeholder="email@example.com"
+                        placeholderTextColor={colors.textLight}
+                        value={member.email}
+                        onChangeText={(v) => updateCustomMember(index, 'email', v)}
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                      />
+                      <TextInput
+                        style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                        placeholder="₱0.00"
+                        placeholderTextColor={colors.textLight}
+                        value={member.amount}
+                        onChangeText={(v) => updateCustomMember(index, 'amount', v)}
+                        keyboardType="decimal-pad"
+                      />
                       {customMembers.length > 1 && (
                         <TouchableOpacity
-                          style={styles.removeBtn}
+                          style={styles.inlineRemoveBtn}
                           onPress={() => removeCustomMember(index)}
                         >
                           <Ionicons name="trash-outline" size={16} color={colors.error} />
@@ -408,6 +497,26 @@ export default function AmbaganScreen() {
                     <Ionicons name="add-circle-outline" size={18} color={colors.ambaganLedger} />
                     <Text style={styles.addMemberText}>Add Another Member</Text>
                   </TouchableOpacity>
+
+                  <Text style={styles.inputLabel}>Payment Method</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+                    {['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'].map((m) => (
+                      <TouchableOpacity
+                        key={m}
+                        style={[styles.methodChip, paymentMethod === m && styles.methodChipActive]}
+                        onPress={() => setPaymentMethod(m)}
+                      >
+                        <Text style={[styles.methodChipText, paymentMethod === m && styles.methodChipTextActive]}>{m}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Payment details (e.g. GCash number 09XXXXXXXXX)"
+                    placeholderTextColor={colors.textLight}
+                    value={paymentDetails}
+                    onChangeText={setPaymentDetails}
+                  />
 
                   <TouchableOpacity
                     style={[styles.saveBtn, { backgroundColor: colors.ambaganLedger, marginTop: 12 }]}
@@ -428,17 +537,17 @@ export default function AmbaganScreen() {
 const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext').useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { backgroundColor: colors.ambaganLedger, padding: 24, paddingTop: 56 },
+    header: { backgroundColor: colors.ambaganLedger, padding: 24, paddingTop: 56, paddingBottom: 20 },
     headerTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
     headerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 14, marginTop: 4 },
-    list: { flex: 1, padding: 12 },
-    emptyContainer: { alignItems: 'center', paddingTop: 60, paddingHorizontal: 32 },
+    list: { flex: 1, padding: 16 },
+    emptyContainer: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 32 },
     emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.textSecondary, marginTop: 16, marginBottom: 8 },
-    emptyText: { fontSize: 14, color: colors.textLight, textAlign: 'center', lineHeight: 20 },
-    groupCard: { backgroundColor: colors.surface, borderRadius: 12, padding: 16, marginBottom: 10, elevation: 1 },
-    groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 },
+    emptyText: { fontSize: 14, color: colors.textLight, textAlign: 'center', lineHeight: 22 },
+    groupCard: { backgroundColor: colors.surface, borderRadius: 14, padding: 18, marginBottom: 12, elevation: 1 },
+    groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
     groupTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-    groupDate: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+    groupDate: { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
     groupAmount: { fontSize: 16, fontWeight: '800', color: colors.ambaganLedger },
     groupFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
     splitBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -481,16 +590,13 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     // Custom split
     customHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
     customTotal: { fontSize: 13, fontWeight: '700', color: colors.ambaganLedger },
-    customRow: { marginBottom: 4 },
-    customRowFields: { flexDirection: 'row', gap: 8 },
-    customEmailInput: { flex: 2, marginBottom: 0 },
-    customAmountInput: { flex: 1, marginBottom: 0 },
-    removeBtn: {
-      alignSelf: 'flex-end', padding: 6, marginTop: 4,
-      backgroundColor: colors.error + '15', borderRadius: 8,
-      alignItems: 'center', marginBottom: 8,
-    },
-    addMemberBtn: {
+    // Member row — inline trash button, no extra gap
+    memberRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+    memberInput: { flex: 1, marginBottom: 0 },
+    inlineRemoveBtn: {
+      padding: 8, borderRadius: 8,
+      backgroundColor: colors.error + '15',
+    },    addMemberBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 8,
       paddingVertical: 10, paddingHorizontal: 14,
       borderRadius: 10, borderWidth: 1.5,
@@ -498,4 +604,14 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       justifyContent: 'center', marginBottom: 4,
     },
     addMemberText: { fontSize: 14, color: colors.ambaganLedger, fontWeight: '600' },
+    // Payment method chips
+    methodChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: colors.border, marginRight: 8, backgroundColor: colors.background },
+    methodChipActive: { backgroundColor: colors.ambaganLedger, borderColor: colors.ambaganLedger },
+    methodChipText: { fontSize: 13, color: colors.textSecondary },
+    methodChipTextActive: { color: '#fff', fontWeight: '600' },
+    // Paid indicator on card
+    paidIndicatorRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 },
+    paidIndicatorBar: { flex: 1, height: 5, backgroundColor: colors.border, borderRadius: 3, overflow: 'hidden' },
+    paidIndicatorFill: { height: 5, backgroundColor: colors.success, borderRadius: 3 },
+    paidIndicatorText: { fontSize: 11, fontWeight: '700', color: colors.textSecondary, minWidth: 50, textAlign: 'right' },
   });
