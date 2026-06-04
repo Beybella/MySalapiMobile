@@ -44,10 +44,10 @@ export const DarkColors = {
   background: '#121C1A',
   surface: '#1E2F2C',
 
-  // Accents
-  primary: '#50E3C2',
-  primaryDark: '#32A08E',
-  secondary: '#32A08E',
+  // Accents — soft muted teal
+  primary: '#2E9E8A',
+  primaryDark: '#27806F',
+  secondary: '#27806F',
 
   // Text
   textPrimary: '#F3FDFB',
@@ -61,16 +61,16 @@ export const DarkColors = {
   // Status
   error: '#ff6b7a',
   warning: '#D9BF77',
-  success: '#50E3C2',
-  info: '#50E3C2',
+  success: '#2E9E8A',
+  info: '#2E9E8A',
 
   // Health status
-  healthy: '#50E3C2',
+  healthy: '#2E9E8A',
   atRisk: '#D9BF77',
   critical: '#ff6b7a',
 
   // Ledger accent colors
-  personalLedger: '#50E3C2',
+  personalLedger: '#2E9E8A',
   pautangLedger: '#7aafd4',
   ambaganLedger: '#a98ee0',
   budgetPlanner: '#D9BF77',

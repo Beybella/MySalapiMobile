@@ -70,8 +70,10 @@ export default function BudgetScreen() {
     if (!user) return;
     const { start, end } = getPeriodDates(periodPreset);
     const { data: funds } = await supabase.from('fund_sources').select('*').eq('user_id', user.id).order('created_at');
-    const { data: billData } = await supabase.from('bill_reminders').select('*').eq('user_id', user.id).eq('is_paid', false).gte('due_date', start).lte('due_date', end).order('due_date');
-    const { data: allocData } = await supabase.from('budget_allocations').select('*').eq('user_id', user.id).gte('created_at', start);
+    const { data: billData, error: billError } = await supabase.from('bill_reminders').select('*').eq('user_id', user.id).eq('is_paid', false).gte('due_date', start).lte('due_date', end).order('due_date');
+    console.log('[Budget] period:', start, '→', end, '| bills fetched:', billData?.length, '| error:', billError?.message);
+    console.log('[Budget] bill due_dates:', (billData || []).map((b: any) => b.due_date));
+    const { data: allocData } = await supabase.from('budget_allocations').select('*').eq('user_id', user.id);
     const fundsWithBalance = (funds || []).map((f) => {
       const allocated = (allocData || []).filter((a) => a.fund_source_id === f.id).reduce((s: number, a: any) => s + Number(a.amount), 0);
       return { ...f, available_balance: Number(f.credit_limit || f.initial_balance) - allocated };
@@ -299,7 +301,7 @@ export default function BudgetScreen() {
                 </View>
               </View>
             )}
-            {shortfall === 0 && bills.length > 0 && (
+            {shortfall === 0 && bills.length > 0 && fundSources.length > 0 && totalObligations > 0 && (
               <View style={styles.healthyBanner}>
                 <Ionicons name="checkmark-circle" size={20} color={colors.success} />
                 <Text style={styles.healthyText}>All bills are covered! Remaining: {formatCurrency(totalAvailable - totalObligations)}</Text>

@@ -140,19 +140,19 @@ export default function PautangScreen() {
         {loan.status !== 'paid' && (
           <View style={styles.loanActions}>
             {isGiven && (
-              <TouchableOpacity style={styles.actionBtn} onPress={() => { setSelectedLoan(loan); setShowRecordPayment(true); }}>
-                <Ionicons name="cash-outline" size={16} color={colors.primary} />
-                <Text style={styles.actionBtnText}>Record Payment</Text>
+              <TouchableOpacity style={styles.actionBtnSolid} onPress={() => { setSelectedLoan(loan); setShowRecordPayment(true); }}>
+                <Ionicons name="cash-outline" size={16} color="#fff" />
+                <Text style={styles.actionBtnSolidText}>Record Payment</Text>
               </TouchableOpacity>
             )}
             {isGiven && (
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: colors.secondary + '25' }, sendingSingil === loan.id && { opacity: 0.5 }]}
+                style={[styles.actionBtn, sendingSingil === loan.id && { opacity: 0.5 }]}
                 onPress={() => sendSingil === loan.id ? null : sendSingilEmail(loan)}
                 disabled={sendingSingil === loan.id}
               >
-                <Ionicons name="mail-outline" size={16} color={colors.secondary} />
-                <Text style={[styles.actionBtnText, { color: colors.secondary }]}>
+                <Ionicons name="mail-outline" size={16} color={colors.pautangLedger} />
+                <Text style={styles.actionBtnText}>
                   {sendingSingil === loan.id ? 'Sending...' : 'Singil'}
                 </Text>
               </TouchableOpacity>
@@ -282,8 +282,10 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     amountLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 4 },
     amountValue: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
     loanActions: { flexDirection: 'row', gap: 8 },
-    actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.primary + '20', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-    actionBtnText: { fontSize: 13, color: colors.primary, fontWeight: '600' },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.pautangLedger + '20', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+    actionBtnText: { fontSize: 13, color: colors.pautangLedger, fontWeight: '600' },
+    actionBtnSolid: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.pautangLedger, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
+    actionBtnSolidText: { fontSize: 13, color: '#fff', fontWeight: '600' },
     fab: { position: 'absolute', bottom: 24, right: 24, backgroundColor: colors.pautangLedger, width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 4 },
     modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
     modal: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '82%' },

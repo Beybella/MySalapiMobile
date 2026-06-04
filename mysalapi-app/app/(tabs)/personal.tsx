@@ -36,8 +36,9 @@ export default function PersonalScreen() {
   const [expDate, setExpDate] = useState(new Date().toISOString().split('T')[0]);
   const [expDesc, setExpDesc] = useState('');
 
-  // ── Add Bill modal ────────────────────────────────────────────────────
-  const [showAddBill, setShowAddBill] = useState(false);
+  // ── Add / Edit Bill modal ─────────────────────────────────────────────
+  const [showBillModal, setShowBillModal] = useState(false);
+  const [editingBill, setEditingBill] = useState<any>(null); // null = add mode
   const [billTitle, setBillTitle] = useState('');
   const [billAmount, setBillAmount] = useState('');
   const [billDueDate, setBillDueDate] = useState('');
@@ -133,21 +134,65 @@ export default function PersonalScreen() {
     );
   };
 
-  // ── Add bill ──────────────────────────────────────────────────────────
-  const addBill = async () => {
+  // ── Open add bill ─────────────────────────────────────────────────────
+  const openAddBill = () => {
+    setEditingBill(null);
+    setBillTitle(''); setBillAmount(''); setBillDueDate(''); setBillReminderDays('3');
+    setShowBillModal(true);
+  };
+
+  // ── Open edit bill ────────────────────────────────────────────────────
+  const openEditBill = (bill: any) => {
+    setEditingBill(bill);
+    setBillTitle(bill.title);
+    setBillAmount(String(bill.amount));
+    setBillDueDate(bill.due_date);
+    setBillReminderDays(String(bill.reminder_days_before ?? 3));
+    setShowBillModal(true);
+  };
+
+  // ── Save (add or update) bill ─────────────────────────────────────────
+  const saveBill = async () => {
     if (!billTitle || !billAmount || !billDueDate) {
       Alert.alert('Error', 'All fields are required.'); return;
     }
     const amount = parseFloat(billAmount);
     if (isNaN(amount) || amount <= 0) { Alert.alert('Error', 'Enter a valid amount.'); return; }
-    const { error } = await supabase.from('bill_reminders').insert({
-      user_id: user!.id, title: billTitle, amount,
-      due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3,
-    });
-    if (error) { Alert.alert('Error', error.message); return; }
-    setShowAddBill(false);
-    setBillTitle(''); setBillAmount(''); setBillDueDate(''); setBillReminderDays('3');
+
+    if (editingBill) {
+      const { error } = await supabase.from('bill_reminders').update({
+        title: billTitle, amount,
+        due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3,
+      }).eq('id', editingBill.id);
+      if (error) { Alert.alert('Error', error.message); return; }
+    } else {
+      const { error } = await supabase.from('bill_reminders').insert({
+        user_id: user!.id, title: billTitle, amount,
+        due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3,
+      });
+      if (error) { Alert.alert('Error', error.message); return; }
+    }
+
+    setShowBillModal(false);
     loadData();
+  };
+
+  // ── Delete bill ───────────────────────────────────────────────────────
+  const deleteBill = (bill: any) => {
+    Alert.alert(
+      'Delete Bill',
+      `Delete "${bill.title}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete', style: 'destructive', onPress: async () => {
+            await supabase.from('bill_reminders').delete().eq('id', bill.id);
+            setShowBillModal(false);
+            loadData();
+          },
+        },
+      ]
+    );
   };
 
   // ── Open pay confirmation ─────────────────────────────────────────────
@@ -259,7 +304,12 @@ export default function PersonalScreen() {
                 const isDueSoon = !bill.is_paid && !isOverdue &&
                   (new Date(bill.due_date).getTime() - Date.now()) < 3 * 86400000;
                 return (
-                  <View key={bill.id} style={[styles.item, isOverdue && styles.itemOverdue]}>
+                  <TouchableOpacity
+                    key={bill.id}
+                    style={[styles.item, isOverdue && styles.itemOverdue]}
+                    onPress={() => openEditBill(bill)}
+                    activeOpacity={0.75}
+                  >
                     <View style={styles.itemLeft}>
                       <Ionicons
                         name={bill.is_paid ? 'checkmark-circle' : isOverdue ? 'alert-circle' : 'time-outline'}
@@ -288,13 +338,14 @@ export default function PersonalScreen() {
                       {!bill.is_paid && (
                         <TouchableOpacity
                           style={styles.markPaidBtn}
-                          onPress={() => openPayModal(bill)}
+                          onPress={(e) => { e.stopPropagation(); openPayModal(bill); }}
                         >
                           <Text style={styles.markPaid}>Mark Paid</Text>
                         </TouchableOpacity>
                       )}
+                      <Ionicons name="chevron-forward" size={14} color={colors.textLight} style={{ marginTop: 4 }} />
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 );
               })
             )}
@@ -304,7 +355,7 @@ export default function PersonalScreen() {
 
       <TouchableOpacity
         style={styles.fab}
-        onPress={() => activeTab === 'expenses' ? openAddExpense() : setShowAddBill(true)}
+        onPress={() => activeTab === 'expenses' ? openAddExpense() : openAddBill()}
       >
         <Ionicons name="add" size={28} color="#fff" />
       </TouchableOpacity>
@@ -372,13 +423,15 @@ export default function PersonalScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* ── Add Bill Modal ── */}
-      <Modal visible={showAddBill} animationType="slide" transparent>
+      {/* ── Add / Edit Bill Modal ── */}
+      <Modal visible={showBillModal} animationType="slide" transparent>
         <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={styles.modal}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Bill Reminder</Text>
-              <TouchableOpacity onPress={() => setShowAddBill(false)} style={styles.closeBtn}>
+              <Text style={styles.modalTitle}>
+                {editingBill ? 'Edit Bill Reminder' : 'Add Bill Reminder'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowBillModal(false)} style={styles.closeBtn}>
                 <Ionicons name="close" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -399,9 +452,20 @@ export default function PersonalScreen() {
                 placeholderTextColor={colors.textLight}
                 value={billReminderDays} onChangeText={setBillReminderDays} keyboardType="number-pad"
               />
-              <TouchableOpacity style={styles.saveBtn} onPress={addBill}>
-                <Text style={styles.saveBtnText}>Save Bill</Text>
+              <TouchableOpacity style={styles.saveBtn} onPress={saveBill}>
+                <Text style={styles.saveBtnText}>
+                  {editingBill ? 'Save Changes' : 'Save Bill'}
+                </Text>
               </TouchableOpacity>
+              {editingBill && (
+                <TouchableOpacity
+                  style={styles.deleteBtn}
+                  onPress={() => deleteBill(editingBill)}
+                >
+                  <Ionicons name="trash-outline" size={16} color={colors.error} />
+                  <Text style={styles.deleteBtnText}>Delete Bill</Text>
+                </TouchableOpacity>
+              )}
             </ScrollView>
           </View>
         </KeyboardAvoidingView>
