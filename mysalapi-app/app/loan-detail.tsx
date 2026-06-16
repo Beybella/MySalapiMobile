@@ -92,12 +92,15 @@ export default function LoanDetailScreen() {
 
         <View style={styles.infoCard}>
           {[
-            { label: 'Loan Date', value: format(new Date(loan.loan_date), 'MMMM d, yyyy') },
-            { label: 'Due Date', value: format(new Date(loan.due_date), 'MMMM d, yyyy'), highlight: isOverdue },
-            { label: 'Payment Method', value: loan.payment_method },
-            { label: 'Payment Details', value: loan.payment_details || '—' },
+            { label: 'Loan Date', value: format(new Date(loan.loan_date), 'MMMM d, yyyy'), icon: 'calendar-outline' },
+            { label: 'Due Date', value: format(new Date(loan.due_date), 'MMMM d, yyyy'), highlight: isOverdue, icon: 'alarm-outline' },
+            { label: 'Payment Method', value: loan.payment_method, icon: 'card-outline' },
+            { label: 'Payment Details', value: loan.payment_details || '—', icon: 'information-circle-outline' },
           ].map((row) => (
             <View key={row.label} style={styles.infoRow}>
+              <View style={styles.infoIconContainer}>
+                <Ionicons name={row.icon as any} size={16} color={colors.pautangLedger} />
+              </View>
               <Text style={styles.infoLabel}>{row.label}</Text>
               <Text style={[styles.infoValue, row.highlight && { color: colors.error, fontWeight: '700' }]}>{row.value}</Text>
             </View>
@@ -141,38 +144,246 @@ const makeStyles = (colors: ReturnType<typeof import('../context/ThemeContext').
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    loadingText: { color: colors.textSecondary, fontSize: 15 },
-    header: { backgroundColor: colors.pautangLedger, paddingTop: 56, paddingBottom: 16, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    loadingText: { color: colors.textSecondary, fontSize: 15, fontWeight: '500' },
+    
+    // Modern Header
+    header: { 
+      backgroundColor: colors.pautangLedger, 
+      paddingTop: 56, 
+      paddingBottom: 24, 
+      paddingHorizontal: 24,
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      justifyContent: 'space-between' 
+    },
     backBtn: { padding: 8 },
-    headerTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+    headerTitle: { 
+      color: '#fff', 
+      fontSize: 24, 
+      fontWeight: '700', 
+      letterSpacing: 0.3 
+    },
+    
     content: { flex: 1 },
-    statusCard: { margin: 16, backgroundColor: colors.surface, borderRadius: 16, padding: 20, elevation: 2 },
-    statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-    partyLabel: { fontSize: 11, color: colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', marginBottom: 2 },
-    partyName: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
-    partyEmail: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-    statusBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-    statusText: { fontSize: 13, fontWeight: '700' },
-    purpose: { fontSize: 13, color: colors.textSecondary, marginBottom: 16, fontStyle: 'italic' },
-    amountRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
-    amountBox: { alignItems: 'center' },
-    amountLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 4 },
-    amountValue: { fontSize: 15, fontWeight: '800', color: colors.textPrimary },
-    progressBg: { height: 8, backgroundColor: colors.border, borderRadius: 4, overflow: 'hidden' },
-    progressFill: { height: 8, backgroundColor: colors.success, borderRadius: 4 },
-    progressLabel: { fontSize: 12, color: colors.textSecondary, marginTop: 6, textAlign: 'right' },
-    infoCard: { marginHorizontal: 16, backgroundColor: colors.surface, borderRadius: 12, padding: 4, elevation: 1 },
-    infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-    infoLabel: { fontSize: 13, color: colors.textSecondary },
-    infoValue: { fontSize: 13, fontWeight: '600', color: colors.textPrimary, maxWidth: '55%', textAlign: 'right' },
-    actionsRow: { flexDirection: 'row', gap: 12, margin: 16 },
-    actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 14, borderRadius: 12 },
-    actionBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+    
+    // Status Card - Keep Original Simple Style
+    statusCard: { 
+      margin: 16, 
+      backgroundColor: colors.surface, 
+      borderRadius: 16, 
+      padding: 20,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    statusRow: { 
+      flexDirection: 'row', 
+      justifyContent: 'space-between', 
+      alignItems: 'flex-start', 
+      marginBottom: 12,
+    },
+    partyLabel: { 
+      fontSize: 11, 
+      color: colors.textSecondary, 
+      fontWeight: '600', 
+      textTransform: 'uppercase', 
+      marginBottom: 2 
+    },
+    partyName: { 
+      fontSize: 17, 
+      fontWeight: '700', 
+      color: colors.textPrimary,
+    },
+    partyEmail: { 
+      fontSize: 12, 
+      color: colors.textSecondary, 
+      marginTop: 2,
+    },
+    statusBadge: { 
+      paddingHorizontal: 12, 
+      paddingVertical: 6, 
+      borderRadius: 20,
+    },
+    statusText: { 
+      fontSize: 13, 
+      fontWeight: '700',
+    },
+    purpose: { 
+      fontSize: 13, 
+      color: colors.textSecondary, 
+      marginBottom: 16,
+      fontStyle: 'italic',
+    },
+    
+    // Amount Display - Keep Original Simple Style
+    amountRow: { 
+      flexDirection: 'row', 
+      justifyContent: 'space-between', 
+      marginBottom: 14,
+    },
+    amountBox: { 
+      alignItems: 'center',
+    },
+    amountLabel: { 
+      fontSize: 11, 
+      color: colors.textSecondary, 
+      marginBottom: 4,
+    },
+    amountValue: { 
+      fontSize: 15, 
+      fontWeight: '800', 
+      color: colors.textPrimary,
+    },
+    
+    // Progress Bar - Keep Simple
+    progressBg: { 
+      height: 8, 
+      backgroundColor: colors.border, 
+      borderRadius: 4, 
+      overflow: 'hidden',
+    },
+    progressFill: { 
+      height: 8, 
+      backgroundColor: colors.success, 
+      borderRadius: 4,
+    },
+    progressLabel: { 
+      fontSize: 12, 
+      color: colors.textSecondary, 
+      marginTop: 6,
+      textAlign: 'right',
+    },
+    
+    // Modern Info Card - Compact to Save Space
+    infoCard: { 
+      marginHorizontal: 16, 
+      marginBottom: 16,
+      backgroundColor: colors.surface, 
+      borderRadius: 14, 
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.06,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    infoRow: { 
+      flexDirection: 'row', 
+      alignItems: 'center',
+      paddingVertical: 8,
+      gap: 10,
+    },
+    infoIconContainer: {
+      width: 28,
+      height: 28,
+      borderRadius: 8,
+      backgroundColor: colors.pautangLedger + '15',
+      justifyContent: 'center',
+      alignItems: 'center',
+      flexShrink: 0,
+    },
+    infoLabel: { 
+      fontSize: 13, 
+      color: colors.textSecondary,
+      fontWeight: '600',
+      flex: 1,
+    },
+    infoValue: { 
+      fontSize: 14, 
+      fontWeight: '600', 
+      color: colors.textPrimary,
+      flex: 1.3,
+      textAlign: 'right',
+      letterSpacing: 0.2,
+    },
+    
+    // Enhanced Action Buttons
+    actionsRow: { 
+      flexDirection: 'row', 
+      gap: 12, 
+      marginHorizontal: 16,
+      marginBottom: 16,
+    },
+    actionBtn: { 
+      flex: 1, 
+      flexDirection: 'row', 
+      alignItems: 'center', 
+      justifyContent: 'center', 
+      gap: 8, 
+      padding: 16, 
+      borderRadius: 14,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.2,
+      shadowRadius: 6,
+      elevation: 4,
+    },
+    actionBtnText: { 
+      color: '#fff', 
+      fontSize: 14, 
+      fontWeight: '700',
+      letterSpacing: 0.3,
+    },
+    
+    // Payment History Section
     section: { margin: 16 },
-    sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, marginBottom: 10 },
-    emptyText: { color: colors.textLight, fontSize: 14, textAlign: 'center', padding: 16 },
-    paymentRow: { backgroundColor: colors.surface, borderRadius: 10, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, elevation: 1 },
-    paymentDate: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-    paymentMethod: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-    paymentAmount: { fontSize: 16, fontWeight: '800', color: colors.success },
+    sectionTitle: { 
+      fontSize: 15, 
+      fontWeight: '700', 
+      color: colors.textPrimary, 
+      marginBottom: 12,
+      letterSpacing: 0.2,
+    },
+    emptyText: { 
+      color: colors.textLight, 
+      fontSize: 14, 
+      textAlign: 'center', 
+      padding: 20,
+      fontWeight: '500',
+    },
+    
+    // Enhanced Payment Cards
+    paymentRow: { 
+      backgroundColor: colors.surface, 
+      borderRadius: 14, 
+      padding: 16, 
+      flexDirection: 'row', 
+      justifyContent: 'space-between', 
+      alignItems: 'center', 
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 4,
+      elevation: 1,
+    },
+    paymentDate: { 
+      fontSize: 14, 
+      fontWeight: '600', 
+      color: colors.textPrimary,
+      letterSpacing: 0.2,
+      marginBottom: 3,
+    },
+    paymentMethod: { 
+      fontSize: 12, 
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    paymentAmount: { 
+      fontSize: 17, 
+      fontWeight: '800', 
+      color: colors.success,
+      letterSpacing: 0.2,
+    },
   });

@@ -11,6 +11,10 @@ import { format } from 'date-fns';
 import DateInput from '../../components/DateInput';
 
 const CATEGORIES = ['Food', 'Transport', 'Utilities', 'Health', 'Entertainment', 'Shopping', 'Education', 'Others'];
+const BILL_CATEGORIES = [
+  'Housing', 'Utilities', 'Transportation', 'Food', 'Healthcare',
+  'Entertainment', 'Insurance', 'Education', 'Subscriptions', 'Other'
+];
 const FUND_TYPE_LABELS: Record<string, string> = {
   credit_card: 'Credit Card',
   savings_account: 'Savings Account',
@@ -43,6 +47,7 @@ export default function PersonalScreen() {
   const [billAmount, setBillAmount] = useState('');
   const [billDueDate, setBillDueDate] = useState('');
   const [billReminderDays, setBillReminderDays] = useState('3');
+  const [billCategory, setBillCategory] = useState('Other');
 
   // ── Mark Paid confirmation modal ──────────────────────────────────────
   const [showPayModal, setShowPayModal] = useState(false);
@@ -138,6 +143,7 @@ export default function PersonalScreen() {
   const openAddBill = () => {
     setEditingBill(null);
     setBillTitle(''); setBillAmount(''); setBillDueDate(''); setBillReminderDays('3');
+    setBillCategory('Other');
     setShowBillModal(true);
   };
 
@@ -148,6 +154,7 @@ export default function PersonalScreen() {
     setBillAmount(String(bill.amount));
     setBillDueDate(bill.due_date);
     setBillReminderDays(String(bill.reminder_days_before ?? 3));
+    setBillCategory(bill.category || 'Other');
     setShowBillModal(true);
   };
 
@@ -163,12 +170,14 @@ export default function PersonalScreen() {
       const { error } = await supabase.from('bill_reminders').update({
         title: billTitle, amount,
         due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3,
+        category: billCategory,
       }).eq('id', editingBill.id);
       if (error) { Alert.alert('Error', error.message); return; }
     } else {
       const { error } = await supabase.from('bill_reminders').insert({
         user_id: user!.id, title: billTitle, amount,
         due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3,
+        category: billCategory,
       });
       if (error) { Alert.alert('Error', error.message); return; }
     }
@@ -242,23 +251,34 @@ export default function PersonalScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Modern Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Personal Ledger</Text>
-        <Text style={styles.headerSub}>This month: {formatCurrency(totalExpenses)}</Text>
+        <View>
+          <Text style={styles.headerTitle}>Personal Ledger</Text>
+          <Text style={styles.headerSubtitle}>Track expenses and bills</Text>
+        </View>
       </View>
 
-      <View style={styles.tabs}>
-        {(['expenses', 'bills'] as const).map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.tabActive]}
-            onPress={() => setActiveTab(tab)}
-          >
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === 'expenses' ? 'Expenses' : 'Bill Reminders'}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* Modern Tabs */}
+      <View style={styles.tabsContainer}>
+        <View style={styles.tabs}>
+          {(['expenses', 'bills'] as const).map((tab) => (
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              onPress={() => setActiveTab(tab)}
+            >
+              <Ionicons 
+                name={tab === 'expenses' ? 'wallet-outline' : 'receipt-outline'} 
+                size={18} 
+                color={activeTab === tab ? colors.personalLedger : colors.textLight} 
+              />
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                {tab === 'expenses' ? 'Expenses' : 'Bills'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}>
@@ -275,19 +295,22 @@ export default function PersonalScreen() {
                   onPress={() => openEditExpense(exp)}
                   activeOpacity={0.75}
                 >
-                  <View style={styles.itemLeft}>
-                    <View style={[styles.categoryBadge, { backgroundColor: colors.primary + '25' }]}>
-                      <Text style={[styles.categoryText, { color: colors.primary }]}>{exp.category}</Text>
-                    </View>
-                    <View style={{ marginLeft: 10 }}>
+                  {/* Category badge on top */}
+                  <View style={[styles.categoryBadge, { backgroundColor: colors.primary + '20', alignSelf: 'flex-start' }]}>
+                    <Text style={[styles.categoryText, { color: colors.primary }]}>{exp.category}</Text>
+                  </View>
+                  
+                  {/* Main content */}
+                  <View style={styles.itemContentRow}>
+                    <View style={{ flex: 1 }}>
                       <Text style={styles.itemTitle}>{exp.title}</Text>
                       <Text style={styles.itemSub}>{format(new Date(exp.expense_date), 'MMM d, yyyy')}</Text>
                       {exp.description ? <Text style={styles.itemDesc}>{exp.description}</Text> : null}
                     </View>
-                  </View>
-                  <View style={styles.itemRight}>
-                    <Text style={styles.itemAmount}>{formatCurrency(Number(exp.amount))}</Text>
-                    <Ionicons name="chevron-forward" size={14} color={colors.textLight} style={{ marginTop: 4 }} />
+                    <View style={styles.itemRight}>
+                      <Text style={styles.itemAmount}>{formatCurrency(Number(exp.amount))}</Text>
+                      <Ionicons name="chevron-forward" size={14} color={colors.textLight} style={{ marginTop: 4 }} />
+                    </View>
                   </View>
                 </TouchableOpacity>
               ))
@@ -299,7 +322,12 @@ export default function PersonalScreen() {
             {bills.length === 0 ? (
               <Text style={styles.emptyText}>No bill reminders set.</Text>
             ) : (
-              bills.map((bill) => {
+              // Sort bills: unpaid first (by due date), then paid bills at the bottom
+              [...bills].sort((a, b) => {
+                if (a.is_paid && !b.is_paid) return 1;
+                if (!a.is_paid && b.is_paid) return -1;
+                return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+              }).map((bill) => {
                 const isOverdue = !bill.is_paid && new Date(bill.due_date) < new Date();
                 const isDueSoon = !bill.is_paid && !isOverdue &&
                   (new Date(bill.due_date).getTime() - Date.now()) < 3 * 86400000;
@@ -310,18 +338,34 @@ export default function PersonalScreen() {
                     onPress={() => openEditBill(bill)}
                     activeOpacity={0.75}
                   >
-                    <View style={styles.itemLeft}>
+                    {/* Category badge on top */}
+                    {bill.category && (
+                      <View style={[styles.categoryBadge, { 
+                        backgroundColor: bill.is_paid ? colors.success + '20' : isOverdue ? colors.error + '20' : colors.warning + '20',
+                        alignSelf: 'flex-start',
+                      }]}>
+                        <Text style={[styles.categoryText, { 
+                          color: bill.is_paid ? colors.success : isOverdue ? colors.error : colors.warning 
+                        }]}>
+                          {bill.category}
+                        </Text>
+                      </View>
+                    )}
+                    
+                    {/* Main content */}
+                    <View style={styles.itemContentRow}>
                       <Ionicons
                         name={bill.is_paid ? 'checkmark-circle' : isOverdue ? 'alert-circle' : 'time-outline'}
-                        size={24}
+                        size={20}
                         color={
                           bill.is_paid ? colors.success
                             : isOverdue ? colors.error
                             : isDueSoon ? colors.warning
                             : colors.textSecondary
                         }
+                        style={{ marginTop: 2 }}
                       />
-                      <View style={{ marginLeft: 10 }}>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
                         <Text style={styles.itemTitle}>{bill.title}</Text>
                         <Text style={[styles.itemSub, isOverdue && { color: colors.error }]}>
                           {bill.is_paid
@@ -332,18 +376,19 @@ export default function PersonalScreen() {
                           <Text style={styles.paidWith}>via {FUND_TYPE_LABELS[bill.paid_with] ?? bill.paid_with}</Text>
                         )}
                       </View>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={styles.itemAmount}>{formatCurrency(Number(bill.amount))}</Text>
-                      {!bill.is_paid && (
-                        <TouchableOpacity
-                          style={styles.markPaidBtn}
-                          onPress={(e) => { e.stopPropagation(); openPayModal(bill); }}
-                        >
-                          <Text style={styles.markPaid}>Mark Paid</Text>
-                        </TouchableOpacity>
-                      )}
-                      <Ionicons name="chevron-forward" size={14} color={colors.textLight} style={{ marginTop: 4 }} />
+                      <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                        <Text style={styles.itemAmount}>{formatCurrency(Number(bill.amount))}</Text>
+                        {!bill.is_paid && (
+                          <TouchableOpacity
+                            style={styles.markPaidBtn}
+                            onPress={(e) => { e.stopPropagation(); openPayModal(bill); }}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
+                            <Text style={styles.markPaidText}>Mark Paid</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
                   </TouchableOpacity>
                 );
@@ -446,12 +491,26 @@ export default function PersonalScreen() {
                 placeholderTextColor={colors.textLight}
                 value={billAmount} onChangeText={setBillAmount} keyboardType="decimal-pad"
               />
+              <Text style={styles.inputLabel}>Category</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+                {BILL_CATEGORIES.map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.catChip, billCategory === cat && styles.catChipActive]}
+                    onPress={() => setBillCategory(cat)}
+                  >
+                    <Text style={[styles.catChipText, billCategory === cat && styles.catChipTextActive]}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
               <DateInput label="Due Date" value={billDueDate} onChange={setBillDueDate} />
+              <Text style={styles.inputLabel}>Reminder</Text>
               <TextInput
-                style={styles.input} placeholder="Remind X days before (default: 3)"
+                style={styles.input} placeholder="Remind me X days before (e.g., 3)"
                 placeholderTextColor={colors.textLight}
                 value={billReminderDays} onChangeText={setBillReminderDays} keyboardType="number-pad"
               />
+              <Text style={styles.helpText}>You'll be notified this many days before the bill is due</Text>
               <TouchableOpacity style={styles.saveBtn} onPress={saveBill}>
                 <Text style={styles.saveBtnText}>
                   {editingBill ? 'Save Changes' : 'Save Bill'}
@@ -571,37 +630,132 @@ export default function PersonalScreen() {
 const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext').useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { backgroundColor: colors.personalLedger, padding: 24, paddingTop: 56, paddingBottom: 20 },
-    headerTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
-    headerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 14, marginTop: 6 },
-    tabs: { flexDirection: 'row', backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-    tab: { flex: 1, padding: 16, alignItems: 'center' },
-    tabActive: { borderBottomWidth: 2, borderBottomColor: colors.personalLedger },
-    tabText: { fontSize: 14, color: colors.textSecondary, fontWeight: '600' },
-    tabTextActive: { color: colors.personalLedger },
-    list: { padding: 16 },
-    emptyText: { textAlign: 'center', color: colors.textLight, padding: 40, fontSize: 14 },
-    item: {
-      backgroundColor: colors.surface, borderRadius: 14, padding: 16,
-      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-      marginBottom: 10, elevation: 1,
+    header: { 
+      backgroundColor: colors.personalLedger, 
+      padding: 24, 
+      paddingTop: 56, 
+      paddingBottom: 24,
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
     },
-    itemOverdue: { borderLeftWidth: 3, borderLeftColor: colors.error },
-    itemLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    headerTitle: { color: '#fff', fontSize: 24, fontWeight: '700', letterSpacing: 0.3 },
+    headerSubtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4, fontWeight: '500' },
+    
+    // Modern Tabs
+    tabsContainer: {
+      backgroundColor: colors.surface,
+      marginHorizontal: 16,
+      marginTop: 16,
+      borderRadius: 12,
+      padding: 4,
+      marginBottom: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    tabs: { 
+      flexDirection: 'row',
+      gap: 4,
+    },
+    tab: { 
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 12,
+      borderRadius: 8,
+    },
+    tabActive: { 
+      backgroundColor: colors.personalLedger + '15',
+    },
+    tabText: { 
+      fontSize: 14, 
+      color: colors.textLight, 
+      fontWeight: '600',
+      letterSpacing: 0.2,
+    },
+    tabTextActive: { 
+      color: colors.personalLedger,
+      fontWeight: '700',
+    },
+    list: { padding: 16, paddingTop: 0 },
+    emptyText: { textAlign: 'center', color: colors.textLight, padding: 40, fontSize: 14, fontWeight: '500' },
+    item: {
+      backgroundColor: colors.surface, 
+      borderRadius: 14, 
+      padding: 14,
+      marginBottom: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 4,
+      elevation: 1,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+    },
+    itemOverdue: { 
+      borderLeftWidth: 3, 
+      borderLeftColor: colors.error,
+      backgroundColor: colors.error + '03',
+    },
+    itemContentRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginTop: 10,
+      gap: 4,
+    },
+    itemLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 },
     itemRight: { alignItems: 'flex-end' },
-    categoryBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 },
-    categoryText: { fontSize: 11, fontWeight: '700' },
-    itemTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-    itemSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-    itemDesc: { fontSize: 11, color: colors.textLight, marginTop: 1 },
-    itemAmount: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-    paidWith: { fontSize: 11, color: colors.success, marginTop: 2, fontWeight: '600' },
-    markPaidBtn: { marginTop: 4 },
-    markPaid: { fontSize: 11, color: colors.success, fontWeight: '600' },
+    categoryBadge: { 
+      paddingHorizontal: 8, 
+      paddingVertical: 4, 
+      borderRadius: 8,
+    },
+    categoryText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+    itemTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, letterSpacing: 0.2, marginBottom: 2 },
+    itemSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2, fontWeight: '500' },
+    itemDesc: { fontSize: 11, color: colors.textLight, marginTop: 3, fontStyle: 'italic', lineHeight: 16 },
+    itemAmount: { fontSize: 16, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.3 },
+    paidWith: { fontSize: 11, color: colors.success, marginTop: 3, fontWeight: '600' },
+    markPaidBtn: { 
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      backgroundColor: colors.success,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 8,
+      shadowColor: colors.success,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    markPaidText: { 
+      fontSize: 11, 
+      color: '#fff', 
+      fontWeight: '700',
+      letterSpacing: 0.3,
+    },
     fab: {
-      position: 'absolute', bottom: 24, right: 24,
-      backgroundColor: colors.personalLedger, width: 56, height: 56,
-      borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 4,
+      position: 'absolute', 
+      bottom: 24, 
+      right: 24,
+      backgroundColor: colors.personalLedger, 
+      width: 60, 
+      height: 60,
+      borderRadius: 30, 
+      justifyContent: 'center', 
+      alignItems: 'center',
+      shadowColor: colors.personalLedger,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 12,
+      elevation: 8,
     },
     // Modals
     modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
@@ -615,6 +769,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       backgroundColor: colors.background,
     },
     inputLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+    helpText: { fontSize: 12, color: colors.textLight, marginTop: -6, marginBottom: 10, lineHeight: 16 },
     catChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: colors.border, marginRight: 8 },
     catChipActive: { backgroundColor: colors.personalLedger, borderColor: colors.personalLedger },
     catChipText: { fontSize: 13, color: colors.textSecondary },

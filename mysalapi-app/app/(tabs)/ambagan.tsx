@@ -218,9 +218,12 @@ export default function AmbaganScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Modern Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Ambagan Ledger</Text>
-        <Text style={styles.headerSub}>Shared group expenses</Text>
+        <View>
+          <Text style={styles.headerTitle}>Ambagan</Text>
+          <Text style={styles.headerSubtitle}>Shared group expenses</Text>
+        </View>
       </View>
 
       <ScrollView
@@ -537,29 +540,59 @@ export default function AmbaganScreen() {
 const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext').useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { backgroundColor: colors.ambaganLedger, padding: 24, paddingTop: 56, paddingBottom: 20 },
-    headerTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
-    headerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 14, marginTop: 4 },
-    list: { flex: 1, padding: 16 },
+    header: { 
+      backgroundColor: colors.ambaganLedger, 
+      padding: 24, 
+      paddingTop: 56, 
+      paddingBottom: 24,
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
+    },
+    headerTitle: { color: '#fff', fontSize: 24, fontWeight: '700', letterSpacing: 0.3 },
+    headerSubtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4, fontWeight: '500' },
+    list: { flex: 1, padding: 16, paddingTop: 16 },
     emptyContainer: { alignItems: 'center', paddingTop: 72, paddingHorizontal: 32 },
     emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.textSecondary, marginTop: 16, marginBottom: 8 },
-    emptyText: { fontSize: 14, color: colors.textLight, textAlign: 'center', lineHeight: 22 },
-    groupCard: { backgroundColor: colors.surface, borderRadius: 14, padding: 18, marginBottom: 12, elevation: 1 },
+    emptyText: { fontSize: 14, color: colors.textLight, textAlign: 'center', lineHeight: 22, fontWeight: '500' },
+    groupCard: { 
+      backgroundColor: colors.surface, 
+      borderRadius: 14, 
+      padding: 14, 
+      marginBottom: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 4,
+      elevation: 1,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+    },
     groupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
-    groupTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-    groupDate: { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
-    groupAmount: { fontSize: 16, fontWeight: '800', color: colors.ambaganLedger },
-    groupFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    groupTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, letterSpacing: 0.2, marginBottom: 2 },
+    groupDate: { fontSize: 12, color: colors.textSecondary, marginTop: 2, fontWeight: '500' },
+    groupAmount: { fontSize: 16, fontWeight: '800', color: colors.ambaganLedger, letterSpacing: 0.3 },
+    groupFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.borderLight || colors.border },
     splitBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    groupSub: { fontSize: 12, color: colors.ambaganLedger, fontWeight: '600' },
-    statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-    statusText: { fontSize: 12, fontWeight: '700' },
+    groupSub: { fontSize: 12, color: colors.ambaganLedger, fontWeight: '700' },
+    statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
     tapHint: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    tapHintText: { fontSize: 11, color: colors.textLight },
+    tapHintText: { fontSize: 11, color: colors.textLight, fontWeight: '500' },
     fab: {
-      position: 'absolute', bottom: 24, right: 24,
-      backgroundColor: colors.ambaganLedger, width: 56, height: 56,
-      borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 4,
+      position: 'absolute', 
+      bottom: 24, 
+      right: 24,
+      backgroundColor: colors.ambaganLedger, 
+      width: 60, 
+      height: 60,
+      borderRadius: 30, 
+      justifyContent: 'center', 
+      alignItems: 'center',
+      shadowColor: colors.ambaganLedger,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 12,
+      elevation: 8,
     },
     // Modal
     modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },

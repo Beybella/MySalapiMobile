@@ -165,19 +165,34 @@ export default function PautangScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Modern Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Pautang Ledger</Text>
-        <Text style={styles.headerSub}>Track loans given and owed</Text>
+        <View>
+          <Text style={styles.headerTitle}>Pautang Ledger</Text>
+          <Text style={styles.headerSubtitle}>Track loans given and owed</Text>
+        </View>
       </View>
 
-      <View style={styles.tabs}>
-        {(['given', 'owed'] as const).map((tab) => (
-          <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && styles.tabActive]} onPress={() => setActiveTab(tab)}>
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-              {tab === 'given' ? `Loans Given (${loansGiven.length})` : `Loans Owed (${loansOwed.length})`}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      {/* Modern Tabs */}
+      <View style={styles.tabsContainer}>
+        <View style={styles.tabs}>
+          {(['given', 'owed'] as const).map((tab) => (
+            <TouchableOpacity 
+              key={tab} 
+              style={[styles.tab, activeTab === tab && styles.tabActive]} 
+              onPress={() => setActiveTab(tab)}
+            >
+              <Ionicons 
+                name={tab === 'given' ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'} 
+                size={18} 
+                color={activeTab === tab ? colors.pautangLedger : colors.textLight} 
+              />
+              <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                {tab === 'given' ? `Given (${loansGiven.length})` : `Owed (${loansOwed.length})`}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
 
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />} style={styles.list}>
@@ -261,32 +276,106 @@ export default function PautangScreen() {
 const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext').useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
-    header: { backgroundColor: colors.pautangLedger, padding: 24, paddingTop: 56, paddingBottom: 20 },
-    headerTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
-    headerSub: { color: 'rgba(255,255,255,0.75)', fontSize: 14, marginTop: 6 },
-    tabs: { flexDirection: 'row', backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.border },
-    tab: { flex: 1, padding: 16, alignItems: 'center' },
-    tabActive: { borderBottomWidth: 2, borderBottomColor: colors.pautangLedger },
-    tabText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
-    tabTextActive: { color: colors.pautangLedger },
-    list: { flex: 1, padding: 16 },
-    emptyText: { textAlign: 'center', color: colors.textLight, padding: 40, fontSize: 14 },
-    loanCard: { backgroundColor: colors.surface, borderRadius: 14, padding: 18, marginBottom: 12, elevation: 1 },
-    loanOverdue: { borderLeftWidth: 3, borderLeftColor: colors.error },
-    loanHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 },
-    loanName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-    loanPurpose: { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
-    statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 },
-    statusText: { fontSize: 12, fontWeight: '700' },
-    loanAmounts: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 },
-    amountLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 4 },
-    amountValue: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
-    loanActions: { flexDirection: 'row', gap: 8 },
-    actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.pautangLedger + '20', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-    actionBtnText: { fontSize: 13, color: colors.pautangLedger, fontWeight: '600' },
-    actionBtnSolid: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.pautangLedger, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8 },
-    actionBtnSolidText: { fontSize: 13, color: '#fff', fontWeight: '600' },
-    fab: { position: 'absolute', bottom: 24, right: 24, backgroundColor: colors.pautangLedger, width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', elevation: 4 },
+    header: { 
+      backgroundColor: colors.pautangLedger, 
+      padding: 24, 
+      paddingTop: 56, 
+      paddingBottom: 24,
+      borderBottomLeftRadius: 24,
+      borderBottomRightRadius: 24,
+    },
+    headerTitle: { color: '#fff', fontSize: 24, fontWeight: '700', letterSpacing: 0.3 },
+    headerSubtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4, fontWeight: '500' },
+    
+    // Modern Tabs
+    tabsContainer: {
+      backgroundColor: colors.surface,
+      marginHorizontal: 16,
+      marginTop: 16,
+      borderRadius: 12,
+      padding: 4,
+      marginBottom: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05,
+      shadowRadius: 8,
+      elevation: 2,
+    },
+    tabs: { 
+      flexDirection: 'row',
+      gap: 4,
+    },
+    tab: { 
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 12,
+      borderRadius: 8,
+    },
+    tabActive: { 
+      backgroundColor: colors.pautangLedger + '15',
+    },
+    tabText: { 
+      fontSize: 13, 
+      color: colors.textLight, 
+      fontWeight: '600',
+      letterSpacing: 0.2,
+    },
+    tabTextActive: { 
+      color: colors.pautangLedger,
+      fontWeight: '700',
+    },
+    list: { flex: 1, padding: 16, paddingTop: 0 },
+    emptyText: { textAlign: 'center', color: colors.textLight, padding: 40, fontSize: 14, fontWeight: '500' },
+    loanCard: { 
+      backgroundColor: colors.surface, 
+      borderRadius: 14, 
+      padding: 14, 
+      marginBottom: 10,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.04,
+      shadowRadius: 4,
+      elevation: 1,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
+    },
+    loanOverdue: { 
+      borderLeftWidth: 3, 
+      borderLeftColor: colors.error,
+      backgroundColor: colors.error + '03',
+    },
+    loanHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+    loanName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, letterSpacing: 0.2, marginBottom: 2 },
+    loanPurpose: { fontSize: 12, color: colors.textSecondary, marginTop: 2, fontWeight: '500' },
+    statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+    loanAmounts: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.borderLight || colors.border },
+    amountLabel: { fontSize: 10, color: colors.textSecondary, marginBottom: 4, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+    amountValue: { fontSize: 14, fontWeight: '700', color: colors.textPrimary, letterSpacing: 0.2 },
+    loanActions: { flexDirection: 'row', gap: 6 },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.pautangLedger + '15', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: colors.pautangLedger + '30' },
+    actionBtnText: { fontSize: 12, color: colors.pautangLedger, fontWeight: '700' },
+    actionBtnSolid: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.pautangLedger, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 8 },
+    actionBtnSolidText: { fontSize: 12, color: '#fff', fontWeight: '700' },
+    fab: { 
+      position: 'absolute', 
+      bottom: 24, 
+      right: 24, 
+      backgroundColor: colors.pautangLedger, 
+      width: 60, 
+      height: 60, 
+      borderRadius: 30, 
+      justifyContent: 'center', 
+      alignItems: 'center',
+      shadowColor: colors.pautangLedger,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.4,
+      shadowRadius: 12,
+      elevation: 8,
+    },
     modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
     modal: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '82%' },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
