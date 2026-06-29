@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ScrollView, Alert, Image,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -11,6 +12,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const router = useRouter();
   const { colors } = useTheme();
 
@@ -51,6 +53,19 @@ export default function LoginScreen() {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert('Enter Email', 'Please enter your email address first, then tap Forgot Password.');
+      return;
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
+    if (error) {
+      Alert.alert('Error', error.message);
+    } else {
+      Alert.alert('Email Sent!', `Password reset link sent to ${email}. Please check your inbox.`);
+    }
+  };
+
   const styles = makeStyles(colors);
 
   return (
@@ -81,14 +96,30 @@ export default function LoginScreen() {
           />
 
           <Text style={styles.label}>Password</Text>
-          <TextInput
-            style={styles.input}
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            placeholderTextColor={colors.textLight}
-            secureTextEntry
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+              placeholderTextColor={colors.textLight}
+              secureTextEntry={!showPassword}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              style={styles.eyeButton}
+            >
+              <Ionicons
+                name={showPassword ? 'eye-off' : 'eye'}
+                size={22}
+                color={colors.textSecondary}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotContainer}>
+            <Text style={styles.forgotText}>Forgot Password?</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -130,6 +161,17 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border,
       borderRadius: 12, padding: 14, fontSize: 15, marginBottom: 14, color: colors.textPrimary,
     },
+    passwordContainer: {
+      flexDirection: 'row', alignItems: 'center',
+      backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border,
+      borderRadius: 12, marginBottom: 8,
+    },
+    passwordInput: {
+      flex: 1, padding: 14, fontSize: 15, color: colors.textPrimary,
+    },
+    eyeButton: { padding: 14 },
+    forgotContainer: { alignItems: 'flex-end', marginBottom: 10 },
+    forgotText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
     button: {
       backgroundColor: colors.primary, borderRadius: 12,
       padding: 16, alignItems: 'center', marginTop: 10,

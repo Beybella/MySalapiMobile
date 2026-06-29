@@ -4,6 +4,7 @@ import {
   KeyboardAvoidingView, Platform, ScrollView, Alert, Image,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -12,15 +13,43 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const { colors } = useTheme();
 
+  const validatePassword = (pass: string) => {
+    if (pass.length < 8) return 'Password must be at least 8 characters.';
+    if (!/[0-9]/.test(pass)) return 'Password must contain at least one number.';
+    if (!/[A-Z]/.test(pass)) return 'Password must contain at least one uppercase letter.';
+    return null;
+  };
+
   const handleRegister = async () => {
-    if (!fullName || !email || !password) {
+    if (!fullName || !email || !password || !confirmPassword) {
       Alert.alert('Error', 'Please fill in all required fields.');
       return;
     }
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      Alert.alert('Invalid Password', passwordError);
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      Alert.alert('Error', 'Passwords do not match!');
+      return;
+    }
+
+    if (!agreedToTerms) {
+      Alert.alert('Terms & Conditions', 'Please agree to the Terms and Conditions to continue.');
+      return;
+    }
+
     setLoading(true);
     const { data, error } = await supabase.auth.signUp({
       email,
@@ -39,6 +68,20 @@ export default function RegisterScreen() {
         [{ text: 'Go to Login', onPress: () => router.replace('/(auth)/login') }]
       );
     }
+  };
+
+  const showTerms = () => {
+    Alert.alert(
+      'Terms and Conditions',
+      'MySalapi is a personal financial management application.\n\n' +
+      '1. This app is for personal use only.\n\n' +
+      '2. All data entry is manual and purely the responsibility of the user.\n\n' +
+      '3. MySalapi is not liable for any financial decisions made based on the data entered.\n\n' +
+      '4. The app does not provide financial advice.\n\n' +
+      '5. Scope and delimitations: MySalapi tracks personal expenses, loans (Pautang), and group shared expenses (Ambagan) only.\n\n' +
+      'By using this app, you agree to these terms.',
+      [{ text: 'Close' }]
+    );
   };
 
   const styles = makeStyles(colors);
@@ -79,11 +122,57 @@ export default function RegisterScreen() {
           />
 
           <Text style={styles.label}>Password *</Text>
-          <TextInput
-            style={styles.input} value={password} onChangeText={setPassword}
-            placeholder="Min. 6 characters" placeholderTextColor={colors.textLight}
-            secureTextEntry
-          />
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Min. 8 chars, 1 Uppercaseletter, 1 number"
+              placeholderTextColor={colors.textLight}
+              secureTextEntry={!showPassword}
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
+              <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.label}>Confirm Password *</Text>
+          <View style={styles.passwordContainer}>
+            <TextInput
+              style={styles.passwordInput}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Re-enter your password"
+              placeholderTextColor={colors.textLight}
+              secureTextEntry={!showConfirmPassword}
+            />
+            <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeButton}>
+              <Ionicons name={showConfirmPassword ? 'eye-off' : 'eye'} size={22} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          {password && confirmPassword && password !== confirmPassword && (
+            <Text style={styles.errorText}>⚠️ Passwords do not match!</Text>
+          )}
+
+          <View style={styles.termsContainer}>
+            <TouchableOpacity
+              onPress={() => setAgreedToTerms(!agreedToTerms)}
+              style={styles.checkbox}
+            >
+              <Ionicons
+                name={agreedToTerms ? 'checkbox' : 'square-outline'}
+                size={24}
+                color={agreedToTerms ? colors.primary : colors.textSecondary}
+              />
+            </TouchableOpacity>
+            <View style={styles.termsTextContainer}>
+              <Text style={styles.termsText}>I agree to the </Text>
+              <TouchableOpacity onPress={showTerms}>
+                <Text style={styles.termsLink}>Terms and Conditions</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
 
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
@@ -125,6 +214,21 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border,
       borderRadius: 12, padding: 14, fontSize: 15, marginBottom: 14, color: colors.textPrimary,
     },
+    passwordContainer: {
+      flexDirection: 'row', alignItems: 'center',
+      backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border,
+      borderRadius: 12, marginBottom: 14,
+    },
+    passwordInput: { flex: 1, padding: 14, fontSize: 15, color: colors.textPrimary },
+    eyeButton: { padding: 14 },
+    errorText: { color: 'red', fontSize: 12, marginBottom: 10, marginTop: -8 },
+    termsContainer: {
+      flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 4,
+    },
+    checkbox: { marginRight: 8 },
+    termsTextContainer: { flexDirection: 'row', flexWrap: 'wrap', flex: 1 },
+    termsText: { color: colors.textSecondary, fontSize: 13 },
+    termsLink: { color: colors.primary, fontSize: 13, fontWeight: '700' },
     button: {
       backgroundColor: colors.primary, borderRadius: 12,
       padding: 16, alignItems: 'center', marginTop: 10,
