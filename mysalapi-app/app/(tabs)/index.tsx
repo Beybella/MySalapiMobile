@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, Image,
+  RefreshControl, Image, Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -64,6 +64,18 @@ export default function HomeScreen() {
   useEffect(() => { loadDashboard(); }, [user]);
   const onRefresh = async () => { setRefreshing(true); await loadDashboard(); setRefreshing(false); };
 
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: signOut },
+      ],
+      { cancelable: true }
+    );
+  };
+
   const formatCurrency = (n: number) =>
     `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -89,7 +101,7 @@ export default function HomeScreen() {
               <Text style={styles.heroName}>{userName}</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={signOut} style={styles.logoutBtn}>
+          <TouchableOpacity onPress={handleSignOut} style={styles.logoutBtn}>
             <Ionicons name="log-out-outline" size={20} color="rgba(255,255,255,0.8)" />
           </TouchableOpacity>
         </View>

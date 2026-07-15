@@ -7,6 +7,9 @@ import { Link, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
+import * as SecureStore from 'expo-secure-store';
+
+const PIN_KEY = 'mysalapi_pin';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -49,6 +52,13 @@ export default function LoginScreen() {
         );
       } else {
         Alert.alert('Login Failed', error.message);
+      }
+    } else {
+      const savedPin = await SecureStore.getItemAsync(PIN_KEY);
+      if (!savedPin) {
+        router.replace('/(auth)/pin');
+      } else {
+        router.replace('/(tabs)');
       }
     }
   };

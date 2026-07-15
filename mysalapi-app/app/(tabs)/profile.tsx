@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
+import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -59,12 +60,23 @@ export default function ProfileScreen() {
       Alert.alert('Saved', 'Profile updated successfully.');
     }
   };
-
-  const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: signOut },
-    ]);
+const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out', 
+      'Are you sure you want to sign out?', 
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await SecureStore.deleteItemAsync('mysalapi_pin');
+            signOut();
+          },
+        },
+      ],
+      { cancelable: true }
+    );
   };
 
   const styles = makeStyles(colors);

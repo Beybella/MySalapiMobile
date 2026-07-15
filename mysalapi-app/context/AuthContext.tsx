@@ -9,6 +9,8 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => Promise<void>;
   resetInactivityTimer: () => void;
+  pinVerified: boolean;
+  setPinVerified: (v: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -17,6 +19,8 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   signOut: async () => {},
   resetInactivityTimer: () => {},
+  pinVerified: false,
+  setPinVerified: () => {},
 });
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
@@ -24,6 +28,7 @@ const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [pinVerified, setPinVerified] = useState(false);
   const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Keep a ref so AppState listener always sees the latest session value
   const sessionRef = useRef<Session | null>(null);
@@ -33,6 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
     setSession(null);
     sessionRef.current = null;
+    setPinVerified(false);
   };
 
   const resetInactivityTimer = useCallback(() => {
@@ -88,7 +94,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signOut, resetInactivityTimer }}>
+    <AuthContext.Provider value={{ session, user: session?.user ?? null, loading, signOut, resetInactivityTimer, pinVerified, setPinVerified }}>
       {children}
     </AuthContext.Provider>
   );

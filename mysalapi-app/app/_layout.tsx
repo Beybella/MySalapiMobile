@@ -12,12 +12,13 @@ function SplashScreen() {
 
   useEffect(() => {
     const playSound = async () => {
-      const { sound } = await Audio.Sound.createAsync(
-        require('../assets/coinsound.wav')
-      );
-      await sound.playAsync();
+      try {
+        const { sound } = await Audio.Sound.createAsync(
+          require('../assets/coinsound.wav')
+        );
+        await sound.playAsync();
+      } catch (e) {}
     };
-
     playSound();
 
     Animated.parallel([
@@ -46,7 +47,7 @@ function SplashScreen() {
 }
 
 function RootLayoutNav() {
-  const { session, loading } = useAuth();
+  const { session, loading, pinVerified } = useAuth();
   const segments = useSegments();
   const router = useRouter();
   const [showSplash, setShowSplash] = useState(true);
@@ -61,12 +62,16 @@ function RootLayoutNav() {
   useEffect(() => {
     if (loading || showSplash) return;
     const inAuthGroup = segments[0] === '(auth)';
+    const onPinScreen = segments[1] === 'pin';
+
     if (!session && !inAuthGroup) {
       router.replace('/(auth)/login');
-    } else if (session && inAuthGroup) {
+    } else if (session && !pinVerified && !onPinScreen) {
+      router.replace('/(auth)/pin');
+    } else if (session && pinVerified && inAuthGroup) {
       router.replace('/(tabs)');
     }
-  }, [session, loading, segments, showSplash]);
+  }, [session, pinVerified, loading, segments, showSplash]);
 
   if (showSplash || loading) {
     return <SplashScreen />;
