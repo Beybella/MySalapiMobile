@@ -20,7 +20,8 @@
       "package": "com.mysalapi.app"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-audio"
     ],
     "scheme": "mysalapi",
     "experiments": {

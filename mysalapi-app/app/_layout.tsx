@@ -4,22 +4,17 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { PaperProvider } from 'react-native-paper';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ThemeProvider } from '../context/ThemeContext';
-import { Audio } from 'expo-av';
+import { useAudioPlayer } from 'expo-audio';
 
 function SplashScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const player = useAudioPlayer(require('../assets/coinsound.wav'));
 
   useEffect(() => {
-    const playSound = async () => {
-      try {
-        const { sound } = await Audio.Sound.createAsync(
-          require('../assets/coinsound.wav')
-        );
-        await sound.playAsync();
-      } catch (e) {}
-    };
-    playSound();
+    try {
+      player.play();
+    } catch (e) {}
 
     Animated.parallel([
       Animated.timing(fadeAnim, {
