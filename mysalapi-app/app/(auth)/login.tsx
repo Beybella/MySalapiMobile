@@ -8,14 +8,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 import * as SecureStore from 'expo-secure-store';
+import AppModal from '../../components/AppModal';
 
-const PIN_KEY = 'mysalapi_pin';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showUnverifiedModal, setShowUnverifiedModal] = useState(false);
+  const [showResentModal, setShowResentModal] = useState(false);
+  const [showForgotSentModal, setShowForgotSentModal] = useState(false);
   const router = useRouter();
   const { colors } = useTheme();
 
@@ -29,37 +32,22 @@ export default function LoginScreen() {
     setLoading(false);
     if (error) {
       if (error.message.toLowerCase().includes('email not confirmed')) {
-        Alert.alert(
-          'Email Not Verified',
-          'Your email address has not been verified yet.\n\nWould you like us to resend the verification email?',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Resend Email',
-              onPress: async () => {
-                const { error: resendError } = await supabase.auth.resend({
-                  type: 'signup',
-                  email,
-                });
-                if (resendError) {
-                  Alert.alert('Error', resendError.message);
-                } else {
-                  Alert.alert('Sent!', `Verification email resent to ${email}`);
-                }
-              },
-            },
-          ]
-        );
+        setShowUnverifiedModal(true);
       } else {
         Alert.alert('Login Failed', error.message);
       }
     } else {
-      const savedPin = await SecureStore.getItemAsync(PIN_KEY);
-      if (!savedPin) {
-        router.replace('/(auth)/pin');
-      } else {
-        router.replace('/(tabs)');
-      }
+      router.replace('/(auth)/pin');
+    }
+  };
+
+  const handleResendEmail = async () => {
+    const { error: resendError } = await supabase.auth.resend({ type: 'signup', email });
+    setShowUnverifiedModal(false);
+    if (resendError) {
+      Alert.alert('Error', resendError.message);
+    } else {
+      setShowResentModal(true);
     }
   };
 
@@ -72,7 +60,7 @@ export default function LoginScreen() {
     if (error) {
       Alert.alert('Error', error.message);
     } else {
-      Alert.alert('Email Sent!', `Password reset link sent to ${email}. Please check your inbox.`);
+      setShowForgotSentModal(true);
     }
   };
 
@@ -149,6 +137,39 @@ export default function LoginScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <AppModal
+        visible={showUnverifiedModal}
+        onClose={() => setShowUnverifiedModal(false)}
+        icon="mail-unread-outline"
+        iconColor={colors.warning}
+        title="Email Not Verified"
+        message="Your email address hasn't been verified yet. Want us to resend the verification email?"
+        buttons={[
+          { label: 'Cancel', variant: 'secondary', onPress: () => setShowUnverifiedModal(false) },
+          { label: 'Resend Email', onPress: handleResendEmail },
+        ]}
+      />
+
+      <AppModal
+        visible={showResentModal}
+        onClose={() => setShowResentModal(false)}
+        icon="checkmark-circle"
+        title="Verification Sent!"
+        message="A new verification link was sent to your inbox."
+        highlight={email}
+        buttons={[{ label: 'Got It', onPress: () => setShowResentModal(false) }]}
+      />
+
+      <AppModal
+        visible={showForgotSentModal}
+        onClose={() => setShowForgotSentModal(false)}
+        icon="lock-open-outline"
+        title="Reset Link Sent!"
+        message="Check your inbox for a password reset link."
+        highlight={email}
+        buttons={[{ label: 'Got It', onPress: () => setShowForgotSentModal(false) }]}
+      />
     </KeyboardAvoidingView>
   );
 }

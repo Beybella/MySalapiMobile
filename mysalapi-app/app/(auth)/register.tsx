@@ -7,6 +7,7 @@ import { Link, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
+import AppModal from '../../components/AppModal';
 
 export default function RegisterScreen() {
   const [fullName, setFullName] = useState('');
@@ -18,6 +19,8 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [registeredEmail, setRegisteredEmail] = useState('');
   const router = useRouter();
   const { colors } = useTheme();
 
@@ -62,11 +65,8 @@ export default function RegisterScreen() {
     } else if (data.session) {
       router.replace('/(tabs)');
     } else {
-      Alert.alert(
-        'Check Your Email',
-        `A verification link was sent to:\n\n${email}\n\nClick the link in the email to activate your account, then come back and log in.`,
-        [{ text: 'Go to Login', onPress: () => router.replace('/(auth)/login') }]
-      );
+      setRegisteredEmail(email);
+      setShowEmailModal(true);
     }
   };
 
@@ -192,6 +192,24 @@ export default function RegisterScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <AppModal
+        visible={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        icon="mail-outline"
+        title="Check Your Email"
+        message={`A verification link was sent to your inbox. Click the link to activate your account, then come back and log in.`}
+        highlight={registeredEmail}
+        buttons={[
+          {
+            label: 'Go to Login',
+            onPress: () => {
+              setShowEmailModal(false);
+              router.replace('/(auth)/login');
+            },
+          },
+        ]}
+      />
     </KeyboardAvoidingView>
   );
 }

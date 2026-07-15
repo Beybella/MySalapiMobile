@@ -70,7 +70,7 @@ const handleSignOut = () => {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
-            await SecureStore.deleteItemAsync('mysalapi_pin');
+            await SecureStore.deleteItemAsync(`mysalapi_pin_${user?.id}`);
             signOut();
           },
         },
