@@ -56,8 +56,9 @@ export default function LoginScreen() {
       Alert.alert('Enter Email', 'Please enter your email address first, then tap Forgot Password.');
       return;
     }
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    if (error) {
+   const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: 'https://krizxei.github.io/MySalapiMobile/reset-password.html',
+    });   if (error) {
       Alert.alert('Error', error.message);
     } else {
       setShowForgotSentModal(true);
