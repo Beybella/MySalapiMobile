@@ -9,6 +9,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { format } from 'date-fns';
 import DateInput from '../../components/DateInput';
+import AppModal from '../../components/AppModal';
+
 
 const CATEGORIES = ['Food', 'Transport', 'Utilities', 'Health', 'Entertainment', 'Shopping', 'Education', 'Others'];
 const BILL_CATEGORIES = [
@@ -49,10 +51,19 @@ export default function PersonalScreen() {
   const [billReminderDays, setBillReminderDays] = useState('3');
   const [billCategory, setBillCategory] = useState('Other');
 
-  // ── Mark Paid confirmation modal ──────────────────────────────────────
+ // ── Mark Paid confirmation modal ──────────────────────────────────────
   const [showPayModal, setShowPayModal] = useState(false);
   const [payingBill, setPayingBill] = useState<any>(null);
   const [selectedFundId, setSelectedFundId] = useState<string | null>(null);
+
+  // ── Error modal ─────────────────────────────────────────────────────
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const showError = (msg: string) => { setErrorMsg(msg); setShowErrorModal(true); };
+
+  // ── Delete confirmation modal ───────────────────────────────────────
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: 'expense' | 'bill'; item: any } | null>(null);
 
   // ─────────────────────────────────────────────────────────────────────
   const loadData = async () => {
@@ -99,22 +110,22 @@ export default function PersonalScreen() {
 
   // ── Save (add or update) expense ──────────────────────────────────────
   const saveExpense = async () => {
-    if (!expTitle || !expAmount) { Alert.alert('Error', 'Title and amount are required.'); return; }
+    if (!expTitle || !expAmount) { showError('Title and amount are required.'); return; }
     const amount = parseFloat(expAmount);
-    if (isNaN(amount) || amount <= 0) { Alert.alert('Error', 'Enter a valid amount.'); return; }
+    if (isNaN(amount) || amount <= 0) { showError('Enter a valid amount.'); return; }
 
     if (editingExpense) {
       const { error } = await supabase.from('personal_expenses').update({
         title: expTitle, amount, category: expCategory,
         expense_date: expDate, description: expDesc,
       }).eq('id', editingExpense.id);
-      if (error) { Alert.alert('Error', error.message); return; }
+      if (error) { showError(error.message); return; }
     } else {
       const { error } = await supabase.from('personal_expenses').insert({
         user_id: user!.id, title: expTitle, amount,
         category: expCategory, expense_date: expDate, description: expDesc,
       });
-      if (error) { Alert.alert('Error', error.message); return; }
+      if (error) { showError(error.message); return; }
     }
 
     setShowExpenseModal(false);
@@ -122,21 +133,10 @@ export default function PersonalScreen() {
   };
 
   // ── Delete expense ────────────────────────────────────────────────────
+  // ── Delete expense ────────────────────────────────────────────────────
   const deleteExpense = (exp: any) => {
-    Alert.alert(
-      'Delete Expense',
-      `Delete "${exp.title}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive', onPress: async () => {
-            await supabase.from('personal_expenses').delete().eq('id', exp.id);
-            setShowExpenseModal(false);
-            loadData();
-          },
-        },
-      ]
-    );
+    setDeleteTarget({ type: 'expense', item: exp });
+    setShowDeleteModal(true);
   };
 
   // ── Open add bill ─────────────────────────────────────────────────────
@@ -161,10 +161,10 @@ export default function PersonalScreen() {
   // ── Save (add or update) bill ─────────────────────────────────────────
   const saveBill = async () => {
     if (!billTitle || !billAmount || !billDueDate) {
-      Alert.alert('Error', 'All fields are required.'); return;
+      showError('All fields are required.'); return;
     }
     const amount = parseFloat(billAmount);
-    if (isNaN(amount) || amount <= 0) { Alert.alert('Error', 'Enter a valid amount.'); return; }
+    if (isNaN(amount) || amount <= 0) { showError('Enter a valid amount.'); return; }
 
     if (editingBill) {
       const { error } = await supabase.from('bill_reminders').update({
@@ -172,14 +172,14 @@ export default function PersonalScreen() {
         due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3,
         category: billCategory,
       }).eq('id', editingBill.id);
-      if (error) { Alert.alert('Error', error.message); return; }
+      if (error) { showError(error.message); return; }
     } else {
       const { error } = await supabase.from('bill_reminders').insert({
         user_id: user!.id, title: billTitle, amount,
         due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3,
         category: billCategory,
       });
-      if (error) { Alert.alert('Error', error.message); return; }
+      if (error) { showError(error.message); return; }
     }
 
     setShowBillModal(false);
@@ -187,21 +187,25 @@ export default function PersonalScreen() {
   };
 
   // ── Delete bill ───────────────────────────────────────────────────────
+  // ── Delete bill ───────────────────────────────────────────────────────
   const deleteBill = (bill: any) => {
-    Alert.alert(
-      'Delete Bill',
-      `Delete "${bill.title}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete', style: 'destructive', onPress: async () => {
-            await supabase.from('bill_reminders').delete().eq('id', bill.id);
-            setShowBillModal(false);
-            loadData();
-          },
-        },
-      ]
-    );
+    setDeleteTarget({ type: 'bill', item: bill });
+    setShowDeleteModal(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const { type, item } = deleteTarget;
+    if (type === 'expense') {
+      await supabase.from('personal_expenses').delete().eq('id', item.id);
+      setShowExpenseModal(false);
+    } else {
+      await supabase.from('bill_reminders').delete().eq('id', item.id);
+      setShowBillModal(false);
+    }
+    setShowDeleteModal(false);
+    setDeleteTarget(null);
+    loadData();
   };
 
   // ── Open pay confirmation ─────────────────────────────────────────────
@@ -215,12 +219,13 @@ export default function PersonalScreen() {
   const confirmPayment = async () => {
     if (!payingBill) return;
 
+    
     // Mark bill as paid
     const { error } = await supabase
       .from('bill_reminders')
       .update({ is_paid: true })
       .eq('id', payingBill.id);
-    if (error) { Alert.alert('Error', error.message); return; }
+    if (error) { showError(error.message); return; }
 
     // If a fund source was selected, deduct by reducing its balance
     if (selectedFundId) {
@@ -623,6 +628,29 @@ export default function PersonalScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <AppModal
+        visible={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        icon="alert-circle"
+        iconColor={colors.error}
+        title="Error"
+        message={errorMsg}
+        buttons={[{ label: 'Got It', onPress: () => setShowErrorModal(false) }]}
+      />
+
+      <AppModal
+        visible={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        icon="trash-outline"
+        iconColor={colors.error}
+        title={deleteTarget?.type === 'expense' ? 'Delete Expense' : 'Delete Bill'}
+        message={`Delete "${deleteTarget?.item?.title}"? This cannot be undone.`}
+        buttons={[
+          { label: 'Cancel', variant: 'secondary', onPress: () => setShowDeleteModal(false) },
+          { label: 'Delete', onPress: confirmDelete },
+        ]}
+      />
     </View>
   );
 }

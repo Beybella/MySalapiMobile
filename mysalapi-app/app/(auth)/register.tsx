@@ -57,9 +57,11 @@ export default function RegisterScreen() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, phone } },
-    });
-    setLoading(false);
+      options: {
+        data: { full_name: fullName, phone },
+        emailRedirectTo: 'https://krizxei.github.io/MySalapiMobile/email-confirmed.html',
+      },
+    });   setLoading(false);
     if (error) {
       Alert.alert('Registration Failed', error.message);
     } else if (data.session) {

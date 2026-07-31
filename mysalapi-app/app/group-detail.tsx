@@ -10,6 +10,8 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { format } from 'date-fns';
 import { sendGroupSingil } from '../lib/api';
+import AppModal from '../components/AppModal';
+
 
 const PAYMENT_METHODS = ['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'];
 
@@ -29,6 +31,13 @@ export default function GroupDetailScreen() {
   const [showPayModal, setShowPayModal] = useState(false);
   const [payingParticipant, setPayingParticipant] = useState<any>(null);
   const [selectedPayMethod, setSelectedPayMethod] = useState('GCash');
+
+  const [showSingilConfirm, setShowSingilConfirm] = useState(false);
+  const [singilTarget, setSingilTarget] = useState<any>(null);
+
+  const [showSingilResult, setShowSingilResult] = useState(false);
+  const [singilResultOk, setSingilResultOk] = useState(true);
+  const [singilResultMsg, setSingilResultMsg] = useState('');
 
   const loadData = async () => {
     const { data: groupData } = await supabase
@@ -80,39 +89,39 @@ export default function GroupDetailScreen() {
     loadData();
   };
 
-  const handleSingil = async (participant: any) => {
-    Alert.alert('Send Singil', `Send collection email to ${participant.participant?.email}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Send', onPress: async () => {
-          if (sendingSingil === participant.id) return;
-          setSendingSingil(participant.id);
-          const { data: payerProfile } = await supabase
-            .from('users').select('full_name, email').eq('id', user!.id).single();
-          const { data: notif } = await supabase.from('email_notifications').insert({
-            recipient_email: participant.participant?.email,
-            subject_email: `Group Expense Reminder: ₱${participant.share_amount} for ${group?.title}`,
-            notification_type: 'group_singil',
-            subject_cost_id: group?.id,
-            status: 'pending',
-          }).select().single();
-          const result = await sendGroupSingil({
-            recipient_email: participant.participant?.email,
-            payer_name: payerProfile?.full_name || payerProfile?.email || 'Your friend',
-            group_title: group?.title,
-            share_amount: Number(participant.share_amount),
-            payment_method: group?.payment_method,
-            payment_details: group?.payment_details,
-            notification_id: notif?.id,
-          });
-          setSendingSingil(null);
-          Alert.alert(
-            result.success ? 'Sent!' : 'Failed',
-            result.success ? 'Singil email sent.' : (result.error ?? 'Could not send email.')
-          );
-        },
-      },
-    ]);
+  const handleSingil = (participant: any) => {
+    setSingilTarget(participant);
+    setShowSingilConfirm(true);
+  };
+
+  const confirmSendGroupSingil = async () => {
+    const participant = singilTarget;
+    setShowSingilConfirm(false);
+    if (!participant || sendingSingil === participant.id) return;
+
+    setSendingSingil(participant.id);
+    const { data: payerProfile } = await supabase
+      .from('users').select('full_name, email').eq('id', user!.id).single();
+    const { data: notif } = await supabase.from('email_notifications').insert({
+      recipient_email: participant.participant?.email,
+      subject_email: `Group Expense Reminder: ₱${participant.share_amount} for ${group?.title}`,
+      notification_type: 'group_singil',
+      subject_cost_id: group?.id,
+      status: 'pending',
+    }).select().single();
+    const result = await sendGroupSingil({
+      recipient_email: participant.participant?.email,
+      payer_name: payerProfile?.full_name || payerProfile?.email || 'Your friend',
+      group_title: group?.title,
+      share_amount: Number(participant.share_amount),
+      payment_method: group?.payment_method,
+      payment_details: group?.payment_details,
+      notification_id: notif?.id,
+    });
+    setSendingSingil(null);
+    setSingilResultOk(result.success);
+    setSingilResultMsg(result.success ? 'Singil email sent.' : (result.error ?? 'Could not send email.'));
+    setShowSingilResult(true);
   };
 
   const formatCurrency = (n: number) =>
@@ -329,6 +338,29 @@ export default function GroupDetailScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <AppModal
+        visible={showSingilConfirm}
+        onClose={() => setShowSingilConfirm(false)}
+        icon="mail-outline"
+        iconColor={colors.ambaganLedger}
+        title="Send Singil"
+        message={`Send collection email to ${singilTarget?.participant?.email || ''}?`}
+        buttons={[
+          { label: 'Cancel', variant: 'secondary', onPress: () => setShowSingilConfirm(false) },
+          { label: 'Send', onPress: confirmSendGroupSingil },
+        ]}
+      />
+
+      <AppModal
+        visible={showSingilResult}
+        onClose={() => setShowSingilResult(false)}
+        icon={singilResultOk ? 'checkmark-circle' : 'close-circle'}
+        iconColor={singilResultOk ? colors.success : colors.error}
+        title={singilResultOk ? 'Sent!' : 'Failed'}
+        message={singilResultMsg}
+        buttons={[{ label: 'OK', onPress: () => setShowSingilResult(false) }]}
+      />
     </View>
   );
 }

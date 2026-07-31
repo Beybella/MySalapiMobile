@@ -16,6 +16,7 @@ export const LightColors = {
 
   // Borders & misc
   border: '#d0ece8',
+  borderLight: '#e7f6f3',
   highlight: '#D9BF77',
 
   // Status
@@ -56,6 +57,7 @@ export const DarkColors = {
 
   // Borders & misc
   border: '#2a4440',
+  borderLight: '#3a5a54',
   highlight: '#D9BF77',
 
   // Status

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, Alert, KeyboardAvoidingView, Platform,
+  ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import DateInput from '../components/DateInput';
+import AppModal from '../components/AppModal';
 
 const PAYMENT_METHODS = ['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'];
 
@@ -23,22 +24,31 @@ export default function RecordPaymentScreen() {
   const [method, setMethod] = useState('GCash');
   const [loading, setLoading] = useState(false);
 
+  // ── Reusable modals ──────────────────────────────────────────────────
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const showError = (msg: string) => { setErrorMsg(msg); setShowErrorModal(true); };
+
+  const [showSavedModal, setShowSavedModal] = useState(false);
+  const [savedMsg, setSavedMsg] = useState('');
+
   const remainingAmount = parseFloat(remaining ?? '0');
 
   const handleSave = async () => {
     const paid = parseFloat(amount);
-    if (isNaN(paid) || paid <= 0) { Alert.alert('Error', 'Enter a valid amount.'); return; }
-    if (paid > remainingAmount) { Alert.alert('Error', `Amount exceeds remaining balance of ₱${remainingAmount.toFixed(2)}`); return; }
+    if (isNaN(paid) || paid <= 0) { showError('Enter a valid amount.'); return; }
+    if (paid > remainingAmount) { showError(`Amount exceeds remaining balance of ₱${remainingAmount.toFixed(2)}`); return; }
     setLoading(true);
     const newRemaining = remainingAmount - paid;
     const newStatus = newRemaining <= 0 ? 'paid' : 'partial';
     const { error: payError } = await supabase.from('loan_payments').insert({
       loan_id: loanId, amount: paid, payment_date: payDate, payment_method: method, recorded_by: user!.id,
     });
-    if (payError) { setLoading(false); Alert.alert('Error', payError.message); return; }
+    if (payError) { setLoading(false); showError(payError.message); return; }
     await supabase.from('loans').update({ amount_remaining: newRemaining, status: newStatus }).eq('id', loanId);
     setLoading(false);
-    Alert.alert('Saved', `Payment of ₱${paid.toFixed(2)} recorded.`, [{ text: 'OK', onPress: () => router.back() }]);
+    setSavedMsg(`Payment of ₱${paid.toFixed(2)} recorded.`);
+    setShowSavedModal(true);
   };
 
   const styles = makeStyles(colors);
@@ -78,6 +88,28 @@ export default function RecordPaymentScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Error Modal */}
+      <AppModal
+        visible={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        icon="alert-circle"
+        iconColor={colors.error}
+        title="Error"
+        message={errorMsg}
+        buttons={[{ label: 'OK', onPress: () => setShowErrorModal(false) }]}
+      />
+
+      {/* Saved Modal — OK navigates back to the loan detail screen */}
+      <AppModal
+        visible={showSavedModal}
+        onClose={() => setShowSavedModal(false)}
+        icon="checkmark-circle"
+        iconColor={colors.pautangLedger}
+        title="Saved"
+        message={savedMsg}
+        buttons={[{ label: 'OK', onPress: () => { setShowSavedModal(false); router.back(); } }]}
+      />
     </KeyboardAvoidingView>
   );
 }

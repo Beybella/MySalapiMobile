@@ -9,6 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { format, isPast } from 'date-fns';
 import { sendSingil } from '../lib/api';
+import AppModal from '../components/AppModal';
 
 export default function LoanDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -33,22 +34,28 @@ export default function LoanDetailScreen() {
   const isOverdue = loan && loan.status !== 'paid' && loan.due_date && isPast(new Date(loan.due_date));
 
   const [sendingLoanSingil, setSendingLoanSingil] = useState(false);
+  const [showSingilConfirm, setShowSingilConfirm] = useState(false);
+  const [showSingilResult, setShowSingilResult] = useState(false);
+  const [singilResultOk, setSingilResultOk] = useState(true);
+  const [singilResultMsg, setSingilResultMsg] = useState('');
 
-  const handleSingil = async () => {
+  const handleSingil = () => {
     if (!loan || sendingLoanSingil) return;
-    Alert.alert('Send Singil', `Send a payment reminder to ${loan.borrower?.email}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Send', onPress: async () => {
-        setSendingLoanSingil(true);
-        const { data: lenderProfile } = await supabase.from('users').select('full_name, email').eq('id', user!.id).single();
-        const { data: notif } = await supabase.from('email_notifications').insert({ recipient_email: loan.borrower?.email, subject_email: `Payment Reminder: ₱${loan.amount_remaining}`, notification_type: 'singil', subject_cost_id: loan.id, status: 'pending' }).select().single();
-        const result = await sendSingil({ recipient_email: loan.borrower?.email, lender_name: lenderProfile?.full_name || lenderProfile?.email || 'Your lender', amount: Number(loan.amount_remaining), purpose: loan.purpose, due_date: loan.due_date, payment_method: loan.payment_method, payment_details: loan.payment_details, notification_id: notif?.id });
-        setSendingLoanSingil(false);
-        Alert.alert(result.success ? 'Sent!' : 'Failed', result.success ? 'Singil email sent to borrower.' : (result.error ?? 'Could not send email.'));
-      }},
-    ]);
+    setShowSingilConfirm(true);
   };
 
+  const confirmSendSingil = async () => {
+    setShowSingilConfirm(false);
+    if (!loan) return;
+    setSendingLoanSingil(true);
+    const { data: lenderProfile } = await supabase.from('users').select('full_name, email').eq('id', user!.id).single();
+    const { data: notif } = await supabase.from('email_notifications').insert({ recipient_email: loan.borrower?.email, subject_email: `Payment Reminder: ₱${loan.amount_remaining}`, notification_type: 'singil', subject_cost_id: loan.id, status: 'pending' }).select().single();
+    const result = await sendSingil({ recipient_email: loan.borrower?.email, lender_name: lenderProfile?.full_name || lenderProfile?.email || 'Your lender', amount: Number(loan.amount_remaining), purpose: loan.purpose, due_date: loan.due_date, payment_method: loan.payment_method, payment_details: loan.payment_details, notification_id: notif?.id });
+    setSendingLoanSingil(false);
+    setSingilResultOk(result.success);
+    setSingilResultMsg(result.success ? 'Singil email sent to borrower.' : (result.error ?? 'Could not send email.'));
+    setShowSingilResult(true);
+  };
   const formatCurrency = (n: number) => `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
   const styles = makeStyles(colors);
 
@@ -136,6 +143,29 @@ export default function LoanDetailScreen() {
           )}
         </View>
       </ScrollView>
+
+      <AppModal
+        visible={showSingilConfirm}
+        onClose={() => setShowSingilConfirm(false)}
+        icon="mail-outline"
+        iconColor={colors.pautangLedger}
+        title="Send Singil"
+        message={`Send a payment reminder to ${loan?.borrower?.email || ''}?`}
+        buttons={[
+          { label: 'Cancel', variant: 'secondary', onPress: () => setShowSingilConfirm(false) },
+          { label: 'Send', onPress: confirmSendSingil },
+        ]}
+      />
+
+      <AppModal
+        visible={showSingilResult}
+        onClose={() => setShowSingilResult(false)}
+        icon={singilResultOk ? 'checkmark-circle' : 'close-circle'}
+        iconColor={singilResultOk ? colors.success : colors.error}
+        title={singilResultOk ? 'Sent!' : 'Failed'}
+        message={singilResultMsg}
+        buttons={[{ label: 'OK', onPress: () => setShowSingilResult(false) }]}
+      />
     </View>
   );
 }

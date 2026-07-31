@@ -11,6 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { format, addDays, startOfMonth, endOfMonth } from 'date-fns';
 import { sendShortfallAlert } from '../../lib/api';
 import DateInput from '../../components/DateInput';
+import AppModal from '../../components/AppModal';
 
 const FUND_TYPES = ['credit_card', 'savings_account', 'cash'];
 const FUND_TYPE_LABELS: Record<string, string> = {
@@ -112,6 +113,42 @@ export default function BudgetScreen() {
   const [paymentHistory, setPaymentHistory] = useState<any[]>([]);
   const [budgetVsActual, setBudgetVsActual] = useState<any[]>([]);
 
+  // ── Reusable modals ──────────────────────────────────────────────────
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const showError = (msg: string) => { setErrorMsg(msg); setShowErrorModal(true); };
+
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [infoTitle, setInfoTitle] = useState('');
+  const [infoMsg, setInfoMsg] = useState('');
+  const showInfo = (title: string, msg: string) => { setInfoTitle(title); setInfoMsg(msg); setShowInfoModal(true); };
+
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmTitle, setConfirmTitle] = useState('');
+  const [confirmMsg, setConfirmMsg] = useState('');
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null);
+  const showConfirm = (title: string, msg: string, action: () => void) => {
+    setConfirmTitle(title);
+    setConfirmMsg(msg);
+    setConfirmAction(() => action);
+    setShowConfirmModal(true);
+  };
+  const runConfirm = () => {
+    setShowConfirmModal(false);
+    if (confirmAction) confirmAction();
+  };
+
+  const [showLimitMenu, setShowLimitMenu] = useState(false);
+  const [limitMenuTarget, setLimitMenuTarget] = useState<any>(null);
+
+  const deleteLimit = async (limit: any) => {
+    setShowLimitMenu(false);
+    if (!limit) return;
+    const { error } = await supabase.from('spending_limits').delete().eq('id', limit.id);
+    if (error) { showError(error.message); return; }
+    loadData();
+  };
+
   useEffect(() => {
     AsyncStorage.getItem(PERIOD_STORAGE_KEY).then((saved) => {
       if (saved) {
@@ -208,17 +245,14 @@ export default function BudgetScreen() {
     AsyncStorage.setItem(PERIOD_STORAGE_KEY, JSON.stringify({ preset, start: periodStart, end: periodEnd }));
   };
 
-  const deleteFundSource = async (fund: any) => {
-    Alert.alert('Delete Fund Source', `Delete "${fund.name}"? All allocations linked to it will also be removed.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
-        const { error: allocError } = await supabase.from('budget_allocations').delete().eq('fund_source_id', fund.id);
-        if (allocError) { Alert.alert('Error', 'Failed to remove allocations.'); return; }
-        const { error } = await supabase.from('fund_sources').delete().eq('id', fund.id);
-        if (error) { Alert.alert('Error', error.message); return; }
-        loadData();
-      }},
-    ]);
+  const deleteFundSource = (fund: any) => {
+    showConfirm('Delete Fund Source', `Delete "${fund.name}"? All allocations linked to it will also be removed.`, async () => {
+      const { error: allocError } = await supabase.from('budget_allocations').delete().eq('fund_source_id', fund.id);
+      if (allocError) { showError('Failed to remove allocations.'); return; }
+      const { error } = await supabase.from('fund_sources').delete().eq('id', fund.id);
+      if (error) { showError(error.message); return; }
+      loadData();
+    });
   };
 
   const openEditFund = (fund: any) => {
@@ -227,29 +261,29 @@ export default function BudgetScreen() {
   };
 
   const saveEditFund = async () => {
-    if (!fundName || !fundBalance) { Alert.alert('Error', 'Name and balance are required.'); return; }
+    if (!fundName || !fundBalance) { showError('Name and balance are required.'); return; }
     const balance = parseFloat(fundBalance);
-    if (isNaN(balance) || balance <= 0) { Alert.alert('Error', 'Enter a valid balance.'); return; }
+    if (isNaN(balance) || balance <= 0) { showError('Enter a valid balance.'); return; }
     const payload: any = { name: fundName, type: fundType };
     if (fundType === 'credit_card') { payload.credit_limit = balance; payload.initial_balance = null; }
     else { payload.initial_balance = balance; payload.credit_limit = null; }
     const { error } = await supabase.from('fund_sources').update(payload).eq('id', editingFund.id);
-    if (error) { Alert.alert('Error', error.message); return; }
+    if (error) { showError(error.message); return; }
     setShowEditFund(false); setEditingFund(null); setFundName(''); setFundBalance(''); setFundType('savings_account');
     loadData();
   };
 
   const addFundSource = async () => {
-    if (!fundName || !fundBalance) { Alert.alert('Error', 'Name and balance are required.'); return; }
+    if (!fundName || !fundBalance) { showError('Name and balance are required.'); return; }
     const balance = parseFloat(fundBalance);
-    if (isNaN(balance) || balance <= 0) { Alert.alert('Error', 'Enter a valid balance.'); return; }
+    if (isNaN(balance) || balance <= 0) { showError('Enter a valid balance.'); return; }
     const { data: existing } = await supabase.from('fund_sources').select('id').eq('user_id', user!.id).eq('name', fundName).single();
-    if (existing) { Alert.alert('Error', 'A fund source with that name already exists.'); return; }
+    if (existing) { showError('A fund source with that name already exists.'); return; }
     const payload: any = { user_id: user!.id, name: fundName, type: fundType };
     if (fundType === 'credit_card') payload.credit_limit = balance;
     else payload.initial_balance = balance;
     const { error } = await supabase.from('fund_sources').insert(payload);
-    if (error) { Alert.alert('Error', error.message); return; }
+    if (error) { showError(error.message); return; }
     setShowAddFund(false); setFundName(''); setFundBalance(''); setFundType('savings_account');
     loadData();
   };
@@ -273,13 +307,10 @@ export default function BudgetScreen() {
     if (!fund) return;
     const effectiveBalance = getEffectiveBalance(fund);
     if (effectiveBalance < Number(selectedBill.amount)) {
-      Alert.alert(
+      showConfirm(
         'Shortfall Warning',
         `${fund.name} will be short by ₱${(Number(selectedBill.amount) - effectiveBalance).toFixed(2)}. Proceed anyway?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Confirm', onPress: () => saveAllocation(fundSourceId) },
-        ]
+        () => saveAllocation(fundSourceId)
       );
     } else {
       saveAllocation(fundSourceId);
@@ -287,6 +318,7 @@ export default function BudgetScreen() {
   };
 
   const saveAllocation = async (fundSourceId: string) => {
+    if (!selectedBill) return;
     // upsert replaces any existing allocation for this bill automatically
     await supabase.from('budget_allocations').upsert(
       {
@@ -323,16 +355,13 @@ export default function BudgetScreen() {
       eligible.sort((a, b) => b.available_balance - a.available_balance);
       if (eligible.length > 0) { plan.push({ bill, fund: eligible[0] }); eligible[0].available_balance -= Number(bill.amount); }
     }
-    if (plan.length === 0) { Alert.alert('No allocations possible', 'No fund source has enough balance for any bill.'); return; }
-    Alert.alert('Auto-Allocate Plan', `${plan.length} bill(s) will be allocated. Apply?`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Apply', onPress: async () => {
-        for (const { bill, fund } of plan) {
-          await supabase.from('budget_allocations').upsert({ user_id: user!.id, bill_reminder_id: bill.id, fund_source_id: fund.id, amount: bill.amount }, { onConflict: 'bill_reminder_id' });
-        }
-        loadData();
-      }},
-    ]);
+    if (plan.length === 0) { showInfo('No Allocations Possible', 'No fund source has enough balance for any bill.'); return; }
+    showConfirm('Auto-Allocate Plan', `${plan.length} bill(s) will be allocated. Apply?`, async () => {
+      for (const { bill, fund } of plan) {
+        await supabase.from('budget_allocations').upsert({ user_id: user!.id, bill_reminder_id: bill.id, fund_source_id: fund.id, amount: bill.amount }, { onConflict: 'bill_reminder_id' });
+      }
+      loadData();
+    });
   };
 
   const formatCurrency = (n: number) => `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
@@ -390,7 +419,7 @@ export default function BudgetScreen() {
               label="To" 
               value={periodEnd} 
               onChange={(d) => { 
-                if (d < periodStart) { Alert.alert('Error', 'End date must be on or after start date.'); return; } 
+                if (d < periodStart) { showError('End date must be on or after start date.'); return; }
                 setPeriodEnd(d); 
                 AsyncStorage.setItem(PERIOD_STORAGE_KEY, JSON.stringify({ preset: 'Custom', start: periodStart, end: d })); 
                 loadData(); 
@@ -1014,39 +1043,7 @@ export default function BudgetScreen() {
                       </View>
                       <TouchableOpacity
                         style={styles.limitMenuBtn}
-                        onPress={() => {
-                          Alert.alert(
-                            limit.category + ' Limit',
-                            'Choose an action',
-                            [
-                              {
-                                text: 'Edit',
-                                onPress: () => {
-                                  setEditingLimit(limit);
-                                  setLimitCategory(limit.category);
-                                  setLimitAmount(String(limit.limit_amount));
-                                  setShowEditLimit(true);
-                                },
-                              },
-                              {
-                                text: 'Delete',
-                                style: 'destructive',
-                                onPress: async () => {
-                                  const { error } = await supabase
-                                    .from('spending_limits')
-                                    .delete()
-                                    .eq('id', limit.id);
-                                  if (error) {
-                                    Alert.alert('Error', error.message);
-                                    return;
-                                  }
-                                  loadData();
-                                },
-                              },
-                              { text: 'Cancel', style: 'cancel' },
-                            ]
-                          );
-                        }}
+                        onPress={() => { setLimitMenuTarget(limit); setShowLimitMenu(true); }}
                       >
                         <Ionicons name="ellipsis-vertical" size={20} color={colors.textSecondary} />
                       </TouchableOpacity>
@@ -1330,12 +1327,12 @@ export default function BudgetScreen() {
                 style={[styles.saveBtn, { backgroundColor: colors.budgetPlanner }]} 
                 onPress={async () => {
                   if (!goalName || !goalTarget) {
-                    Alert.alert('Error', 'Goal name and target amount are required.');
+                    showError('Goal name and target amount are required.');
                     return;
                   }
                   const target = parseFloat(goalTarget);
                   if (isNaN(target) || target <= 0) {
-                    Alert.alert('Error', 'Enter a valid target amount.');
+                    showError('Enter a valid target amount.');
                     return;
                   }
                   const { error } = await supabase.from('budget_goals').insert({
@@ -1347,7 +1344,7 @@ export default function BudgetScreen() {
                     status: 'active',
                   });
                   if (error) {
-                    Alert.alert('Error', error.message);
+                    showError(error.message);
                     return;
                   }
                   setShowAddGoal(false);
@@ -1425,12 +1422,12 @@ export default function BudgetScreen() {
                 style={[styles.saveBtn, { backgroundColor: colors.warning }]} 
                 onPress={async () => {
                   if (!limitCategory || !limitAmount) {
-                    Alert.alert('Error', 'Category and limit amount are required.');
+                    showError('Category and limit amount are required.');
                     return;
                   }
                   const amount = parseFloat(limitAmount);
                   if (isNaN(amount) || amount <= 0) {
-                    Alert.alert('Error', 'Enter a valid limit amount.');
+                    showError('Enter a valid limit amount.');
                     return;
                   }
                   // Check if limit already exists for this category
@@ -1443,7 +1440,7 @@ export default function BudgetScreen() {
                     .single();
                   
                   if (existing) {
-                    Alert.alert('Error', `A spending limit for ${limitCategory} already exists.`);
+                    showError(`A spending limit for ${limitCategory} already exists.`);
                     return;
                   }
                   
@@ -1456,7 +1453,7 @@ export default function BudgetScreen() {
                     is_active: true,
                   });
                   if (error) {
-                    Alert.alert('Error', error.message);
+                    showError(error.message);
                     return;
                   }
                   setShowAddLimit(false);
@@ -1498,16 +1495,16 @@ export default function BudgetScreen() {
               <Text style={styles.modalSub}>
                 You'll be alerted when spending reaches 80% of this limit.
               </Text>
-              <TouchableOpacity 
-                style={[styles.saveBtn, { backgroundColor: colors.warning }]} 
+              <TouchableOpacity
+                style={[styles.saveBtn, { backgroundColor: colors.warning }]}
                 onPress={async () => {
                   if (!limitAmount) {
-                    Alert.alert('Error', 'Limit amount is required.');
+                    showError('Enter a limit amount.');
                     return;
                   }
                   const amount = parseFloat(limitAmount);
                   if (isNaN(amount) || amount <= 0) {
-                    Alert.alert('Error', 'Enter a valid limit amount.');
+                    showError('Enter a valid limit amount.');
                     return;
                   }
                   const { error } = await supabase
@@ -1515,7 +1512,7 @@ export default function BudgetScreen() {
                     .update({ limit_amount: amount })
                     .eq('id', editingLimit.id);
                   if (error) {
-                    Alert.alert('Error', error.message);
+                    showError(error.message);
                     return;
                   }
                   setShowEditLimit(false);
@@ -1576,12 +1573,12 @@ export default function BudgetScreen() {
                 style={[styles.saveBtn, { backgroundColor: colors.budgetPlanner }]} 
                 onPress={async () => {
                   if (!goalContribution) {
-                    Alert.alert('Error', 'Enter an amount to add.');
+                    showError('Enter an amount to add.');
                     return;
                   }
                   const contribution = parseFloat(goalContribution);
                   if (isNaN(contribution) || contribution <= 0) {
-                    Alert.alert('Error', 'Enter a valid amount.');
+                    showError('Enter a valid amount.');
                     return;
                   }
                   const newAmount = Number(selectedGoal.current_amount) + contribution;
@@ -1590,7 +1587,7 @@ export default function BudgetScreen() {
                     .update({ current_amount: newAmount })
                     .eq('id', selectedGoal.id);
                   if (error) {
-                    Alert.alert('Error', error.message);
+                    showError(error.message);
                     return;
                   }
                   setShowUpdateGoal(false);
@@ -1605,6 +1602,67 @@ export default function BudgetScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Error Modal */}
+      <AppModal
+        visible={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        icon="alert-circle"
+        iconColor={colors.error}
+        title="Error"
+        message={errorMsg}
+        buttons={[{ label: 'OK', onPress: () => setShowErrorModal(false) }]}
+      />
+
+      {/* Info Modal */}
+      <AppModal
+        visible={showInfoModal}
+        onClose={() => setShowInfoModal(false)}
+        icon="information-circle"
+        title={infoTitle}
+        message={infoMsg}
+        buttons={[{ label: 'OK', onPress: () => setShowInfoModal(false) }]}
+      />
+
+      {/* Confirm Modal (Cancel / Confirm) */}
+      <AppModal
+        visible={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        icon="help-circle"
+        iconColor={colors.warning}
+        title={confirmTitle}
+        message={confirmMsg}
+        buttons={[
+          { label: 'Cancel', variant: 'secondary', onPress: () => setShowConfirmModal(false) },
+          { label: 'Confirm', onPress: runConfirm },
+        ]}
+      />
+
+      {/* Spending Limit Action Menu (Edit / Delete) */}
+      <AppModal
+        visible={showLimitMenu}
+        onClose={() => setShowLimitMenu(false)}
+        icon="ellipsis-horizontal-circle"
+        title={limitMenuTarget ? `${limitMenuTarget.category} Limit` : 'Limit'}
+        message="Choose an action for this spending limit."
+        buttons={[
+          { label: 'Cancel', variant: 'secondary', onPress: () => setShowLimitMenu(false) },
+          {
+            label: 'Edit',
+            onPress: () => {
+              setShowLimitMenu(false);
+              setEditingLimit(limitMenuTarget);
+              setLimitCategory(limitMenuTarget.category);
+              setLimitAmount(String(limitMenuTarget.limit_amount));
+              setShowEditLimit(true);
+            },
+          },
+          {
+            label: 'Delete',
+            onPress: () => deleteLimit(limitMenuTarget),
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -1991,6 +2049,15 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       shadowOpacity: 0.06,
       shadowRadius: 8,
       elevation: 2,
+    },
+    // categoryBillCard: same visual treatment as billCard, used for per-category bill rows
+    categoryBillCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 14,
+      padding: 14,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.borderLight || colors.border,
     },
     billUrgent: { 
       borderLeftWidth: 4, 
@@ -2404,24 +2471,6 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       gap: 12,
       marginBottom: 14,
     },
-    goalProgressBar: {
-      flex: 1,
-      height: 10,
-      backgroundColor: colors.background,
-      borderRadius: 5,
-      overflow: 'hidden',
-    },
-    goalProgressFill: {
-      height: '100%',
-      borderRadius: 5,
-    },
-    goalProgressText: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: colors.textSecondary,
-      minWidth: 45,
-      textAlign: 'right',
-    },
     goalAmounts: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -2445,100 +2494,6 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     },
     spacer: {
       height: 24,
-    },
-    
-    // Enhanced Spending Limits Styles
-    limitCard: {
-      backgroundColor: colors.surface,
-      borderRadius: 16,
-      padding: 18,
-      marginBottom: 14,
-      borderWidth: 1,
-      borderColor: colors.borderLight || colors.border,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.08,
-      shadowRadius: 10,
-      elevation: 3,
-    },
-    limitCardOver: {
-      borderLeftWidth: 4,
-      borderLeftColor: colors.error,
-      backgroundColor: colors.error + '05',
-    },
-    limitHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      marginBottom: 14,
-    },
-    limitIconBadge: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
-      backgroundColor: colors.budgetPlanner + '20',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    limitCategory: {
-      fontSize: 15,
-      fontWeight: '700',
-      color: colors.textPrimary,
-      letterSpacing: 0.2,
-    },
-    limitPeriod: {
-      fontSize: 11,
-      color: colors.textSecondary,
-      marginTop: 2,
-      fontWeight: '500',
-      textTransform: 'capitalize',
-    },
-    alertBadge: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
-      backgroundColor: colors.warning,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    limitProgress: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      marginBottom: 12,
-    },
-    limitProgressBar: {
-      flex: 1,
-      height: 10,
-      backgroundColor: colors.background,
-      borderRadius: 5,
-      overflow: 'hidden',
-    },
-    limitProgressFill: {
-      height: '100%',
-      borderRadius: 5,
-    },
-    limitProgressText: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: colors.textSecondary,
-      minWidth: 45,
-      textAlign: 'right',
-    },
-    limitAmounts: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    limitSpent: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: colors.textPrimary,
-    },
-    limitOver: {
-      fontSize: 12,
-      fontWeight: '700',
-      letterSpacing: 0.3,
     },
     
     // Enhanced Analytics Tab Styles
@@ -2846,247 +2801,11 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       marginVertical: 20,
       marginHorizontal: 16,
     },
-    limitMenuBtn: {
-      padding: 8,
-      marginRight: -8,
-    },
-    addFundsBtn: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 6,
-      backgroundColor: colors.budgetPlanner + '15',
-      paddingHorizontal: 16,
-      paddingVertical: 10,
-      borderRadius: 10,
-      marginTop: 12,
-    },
-    addFundsBtnText: {
-      fontSize: 13,
-      fontWeight: '700',
-      color: colors.budgetPlanner,
-      letterSpacing: 0.3,
-    },
-    disabledInput: {
-      backgroundColor: colors.background,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: colors.border,
-    },
-    disabledInputText: {
-      fontSize: 15,
-      color: colors.textSecondary,
-      fontWeight: '600',
-    },
-    goalSummaryCard: {
-      backgroundColor: colors.budgetPlanner + '10',
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: colors.budgetPlanner + '30',
-    },
-    goalSummaryHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8,
-      marginBottom: 12,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.budgetPlanner + '20',
-    },
-    goalSummaryName: {
-      fontSize: 16,
-      fontWeight: '700',
-      color: colors.textPrimary,
-      flex: 1,
-    },
-    goalSummaryRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 8,
-    },
-    goalSummaryLabel: {
-      fontSize: 13,
-      color: colors.textSecondary,
-      fontWeight: '600',
-    },
-    goalSummaryValue: {
-      fontSize: 15,
-      fontWeight: '700',
-      color: colors.textPrimary,
-    },
-  });
 
-// Note: The following styles should be added inside makeStyles function before the closing });
-// They enhance the Goals and Spending Limits sections
-// Due to file size, these are documented here for manual integration:
-
-/*
-Add these styles inside makeStyles before the final });:
-
-    // Enhanced Goals Section Styles
-    goalsSection: {
-      marginBottom: 24,
-    },
-    goalsSectionHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      marginBottom: 16,
-      paddingHorizontal: 16,
-    },
-    goalsSectionLeft: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      flex: 1,
-    },
-    goalsSectionIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-      backgroundColor: colors.budgetPlanner + '15',
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    goalsSectionTitle: {
-      fontSize: 18,
-      fontWeight: '800',
-      color: colors.textPrimary,
-      letterSpacing: 0.3,
-    },
-    goalsSectionSubtitle: {
-      fontSize: 12,
-      color: colors.textSecondary,
-      fontWeight: '500',
-      marginTop: 2,
-    },
-    addGoalBtn: {
-      padding: 4,
-    },
-    enhancedGoalCard: {
-      backgroundColor: colors.surface,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 14,
-      marginHorizontal: 16,
-      borderWidth: 1,
-      borderColor: colors.borderLight || colors.border,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 3 },
-      shadowOpacity: 0.08,
-      shadowRadius: 10,
-      elevation: 3,
-    },
-    goalCardTop: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 14,
-      gap: 12,
-    },
-    goalIconContainer: {
-      flexShrink: 0,
-    },
-    goalIcon: {
-      width: 44,
-      height: 44,
-      borderRadius: 12,
-      justifyContent: 'center',
-      alignItems: 'center',
-    },
-    goalProgressSection: {
-      marginBottom: 14,
-    },
-    goalProgressInfo: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 8,
-    },
-    goalProgressLabel: {
-      fontSize: 11,
-      color: colors.textSecondary,
-      fontWeight: '700',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-    goalProgressPercent: {
-      fontSize: 16,
-      fontWeight: '800',
-      letterSpacing: 0.2,
-    },
-    goalProgressBarContainer: {
-      height: 10,
-      backgroundColor: colors.background,
-      borderRadius: 5,
-      overflow: 'hidden',
-    },
-    goalProgressBar: {
-      height: '100%',
-      borderRadius: 5,
-    },
-    goalBottomRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      paddingTop: 14,
-      borderTopWidth: 1,
-      borderTopColor: colors.borderLight || colors.border,
-      gap: 12,
-    },
-    goalAmount: {
-      flex: 1,
-      alignItems: 'center',
-    },
-    goalAmountLabel: {
-      fontSize: 10,
-      color: colors.textSecondary,
-      fontWeight: '700',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: 4,
-    },
-    goalAmountValue: {
-      fontSize: 14,
-      fontWeight: '800',
-      color: colors.textPrimary,
-      letterSpacing: 0.2,
-    },
-    goalDivider: {
-      width: 1,
-      height: '100%',
-      backgroundColor: colors.borderLight || colors.border,
-    },
-    goalCompleteBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      backgroundColor: colors.success + '15',
-      paddingHorizontal: 12,
-      paddingVertical: 8,
-      borderRadius: 8,
-      marginTop: 12,
-      justifyContent: 'center',
-    },
-    goalCompleteText: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: colors.success,
-      letterSpacing: 0.3,
-    },
-    sectionDivider: {
-      height: 1,
-      backgroundColor: colors.borderLight || colors.border,
-      marginVertical: 20,
-      marginHorizontal: 16,
-    },
-    
-    // Enhanced Spending Limits Section Styles
+    // Enhanced Spending Limits Section Styles (mirrors the Goals section above)
     limitsSection: {
       marginBottom: 24,
+      backgroundColor: colors.background,
     },
     limitsSectionHeader: {
       flexDirection: 'row',
@@ -3138,6 +2857,11 @@ Add these styles inside makeStyles before the final });:
       shadowRadius: 10,
       elevation: 3,
     },
+    limitCardOver: {
+      borderLeftWidth: 4,
+      borderLeftColor: colors.error,
+      backgroundColor: colors.error + '05',
+    },
     limitCardTop: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -3145,16 +2869,15 @@ Add these styles inside makeStyles before the final });:
       gap: 12,
     },
     limitIconContainer: {
-      width: 48,
-      height: 48,
-      borderRadius: 14,
+      width: 44,
+      height: 44,
+      borderRadius: 12,
       backgroundColor: colors.budgetPlanner + '15',
       justifyContent: 'center',
       alignItems: 'center',
-      flexShrink: 0,
     },
     limitCategoryName: {
-      fontSize: 16,
+      fontSize: 15,
       fontWeight: '700',
       color: colors.textPrimary,
       letterSpacing: 0.2,
@@ -3166,13 +2889,9 @@ Add these styles inside makeStyles before the final });:
       fontWeight: '500',
       textTransform: 'capitalize',
     },
-    limitAlertBadge: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: colors.warning,
-      justifyContent: 'center',
-      alignItems: 'center',
+    limitMenuBtn: {
+      padding: 8,
+      marginRight: -8,
     },
     limitProgressSection: {
       marginBottom: 14,
@@ -3253,4 +2972,74 @@ Add these styles inside makeStyles before the final });:
       color: colors.error,
       letterSpacing: 0.3,
     },
-*/
+
+    addFundsBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: colors.budgetPlanner + '15',
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 10,
+      marginTop: 12,
+    },
+    addFundsBtnText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.budgetPlanner,
+      letterSpacing: 0.3,
+    },
+    disabledInput: {
+      backgroundColor: colors.background,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    disabledInputText: {
+      fontSize: 15,
+      color: colors.textSecondary,
+      fontWeight: '600',
+    },
+    goalSummaryCard: {
+      backgroundColor: colors.budgetPlanner + '10',
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: colors.budgetPlanner + '30',
+    },
+    goalSummaryHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 12,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.budgetPlanner + '20',
+    },
+    goalSummaryName: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      flex: 1,
+    },
+    goalSummaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    goalSummaryLabel: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '600',
+    },
+    goalSummaryValue: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
+  });

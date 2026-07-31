@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import AppModal from '../../components/AppModal';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -17,6 +18,11 @@ export default function ProfileScreen() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showEmptyNameModal, setShowEmptyNameModal] = useState(false);
+  const [showSaveErrorModal, setShowSaveErrorModal] = useState(false);
+  const [saveErrorMsg, setSaveErrorMsg] = useState('');
+  const [showSavedModal, setShowSavedModal] = useState(false);
+  
 
   // Notification preferences
   const [billReminders, setBillReminders] = useState(true);
@@ -43,7 +49,7 @@ export default function ProfileScreen() {
 
   const saveProfile = async () => {
     if (!fullName.trim()) {
-      Alert.alert('Error', 'Full name cannot be empty.');
+      setShowEmptyNameModal(true);
       return;
     }
     setLoading(true);
@@ -53,11 +59,12 @@ export default function ProfileScreen() {
       .eq('id', user!.id);
     setLoading(false);
     if (error) {
-      Alert.alert('Error', error.message);
+      setSaveErrorMsg(error.message);
+      setShowSaveErrorModal(true);
     } else {
       setEditing(false);
       loadProfile();
-      Alert.alert('Saved', 'Profile updated successfully.');
+      setShowSavedModal(true);
     }
   };
 const handleSignOut = () => {
@@ -216,6 +223,35 @@ const handleSignOut = () => {
       </TouchableOpacity>
 
       <View style={{ height: 40 }} />
+
+      <AppModal
+        visible={showEmptyNameModal}
+        onClose={() => setShowEmptyNameModal(false)}
+        icon="alert-circle"
+        iconColor={colors.warning}
+        title="Full Name Required"
+        message="Please enter your full name before saving."
+        buttons={[{ label: 'Got It', onPress: () => setShowEmptyNameModal(false) }]}
+      />
+
+      <AppModal
+        visible={showSaveErrorModal}
+        onClose={() => setShowSaveErrorModal(false)}
+        icon="close-circle"
+        iconColor={colors.error}
+        title="Save Failed"
+        message={saveErrorMsg}
+        buttons={[{ label: 'Try Again', onPress: () => setShowSaveErrorModal(false) }]}
+      />
+
+      <AppModal
+        visible={showSavedModal}
+        onClose={() => setShowSavedModal(false)}
+        icon="checkmark-circle"
+        title="Profile Saved!"
+        message="Your profile has been updated successfully."
+        buttons={[{ label: 'Great', onPress: () => setShowSavedModal(false) }]}
+      />
     </ScrollView>
   );
 }

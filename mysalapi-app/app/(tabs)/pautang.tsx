@@ -11,6 +11,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { format, isPast } from 'date-fns';
 import { sendSingil } from '../../lib/api';
 import DateInput from '../../components/DateInput';
+import AppModal from '../../components/AppModal';
 
 const PAYMENT_METHODS = ['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'];
 
@@ -38,6 +39,21 @@ export default function PautangScreen() {
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
   const [payMethod, setPayMethod] = useState('GCash');
 
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const [showSingilConfirm, setShowSingilConfirm] = useState(false);
+  const [singilTarget, setSingilTarget] = useState<any>(null);
+
+  const [showSingilResult, setShowSingilResult] = useState(false);
+  const [singilResultOk, setSingilResultOk] = useState(true);
+  const [singilResultMsg, setSingilResultMsg] = useState('');
+
+  const showError = (msg: string) => {
+    setErrorMsg(msg);
+    setShowErrorModal(true);
+  };
+
   const loadData = async () => {
     if (!user) return;
     const { data: given } = await supabase.from('loans').select('*, borrower:borrower_id(full_name, email)').eq('lender_id', user.id).order('created_at', { ascending: false });
@@ -50,17 +66,17 @@ export default function PautangScreen() {
   const onRefresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
 
   const addLoan = async () => {
-    if (!borrowerEmail || !loanAmount || !dueDate) { Alert.alert('Error', 'Borrower email, amount, and due date are required.'); return; }
+    if (!borrowerEmail || !loanAmount || !dueDate) { showError('Borrower email, amount, and due date are required.'); return; }
     const amount = parseFloat(loanAmount);
-    if (isNaN(amount) || amount <= 0) { Alert.alert('Error', 'Enter a valid amount.'); return; }
+    if (isNaN(amount) || amount <= 0) { showError('Enter a valid amount.'); return; }
     const { data: borrower } = await supabase.from('users').select('id').eq('email', borrowerEmail.toLowerCase().trim()).single();
-    if (!borrower) { Alert.alert('Error', 'No MySalapi user found with that email. They must register first.'); return; }
+    if (!borrower) { showError('No MySalapi user found with that email. They must register first.'); return; }
     const { error } = await supabase.from('loans').insert({
       lender_id: user!.id, borrower_id: borrower.id, amount, amount_remaining: amount,
       purpose: loanPurpose, loan_date: loanDate, due_date: dueDate,
       payment_method: paymentMethod, payment_details: paymentDetails, status: 'active',
     });
-    if (error) { Alert.alert('Error', error.message); return; }
+    if (error) { showError(error.message); return; }
     setShowAddLoan(false);
     setBorrowerEmail(''); setLoanAmount(''); setLoanPurpose(''); setDueDate(''); setPaymentDetails('');
     loadData();
@@ -69,8 +85,8 @@ export default function PautangScreen() {
   const recordPayment = async () => {
     if (!payAmount || !selectedLoan) return;
     const amount = parseFloat(payAmount);
-    if (isNaN(amount) || amount <= 0) { Alert.alert('Error', 'Enter a valid amount.'); return; }
-    if (amount > selectedLoan.amount_remaining) { Alert.alert('Error', `Amount exceeds remaining balance of ₱${selectedLoan.amount_remaining}`); return; }
+    if (isNaN(amount) || amount <= 0) { showError('Enter a valid amount.'); return; }
+    if (amount > selectedLoan.amount_remaining) { showError(`Amount exceeds remaining balance of ₱${selectedLoan.amount_remaining}`); return; }
     const newRemaining = Number(selectedLoan.amount_remaining) - amount;
     const newStatus = newRemaining <= 0 ? 'paid' : 'partial';
     await supabase.from('loan_payments').insert({ loan_id: selectedLoan.id, amount, payment_date: payDate, payment_method: payMethod, recorded_by: user!.id });
@@ -82,31 +98,34 @@ export default function PautangScreen() {
 
   const [sendingSingil, setSendingSingil] = React.useState<string | null>(null);
 
-  const sendSingilEmail = async (loan: any) => {
-    Alert.alert('Send Singil', `Send a debt collection email to ${loan.borrower?.email || loan.lender?.email}?`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Send', onPress: async () => {
-          if (sendingSingil === loan.id) return; // prevent double-send
-          setSendingSingil(loan.id);
-          const { data: lenderProfile } = await supabase.from('users').select('full_name, email').eq('id', user!.id).single();
-          const { data: notif } = await supabase.from('email_notifications').insert({
-            recipient_email: loan.borrower?.email,
-            subject_email: `Payment Reminder: ₱${loan.amount_remaining} due`,
-            notification_type: 'singil', subject_cost_id: loan.id, status: 'pending',
-          }).select().single();
-          const result = await sendSingil({
-            recipient_email: loan.borrower?.email,
-            lender_name: lenderProfile?.full_name || lenderProfile?.email || 'Your lender',
-            amount: Number(loan.amount_remaining), purpose: loan.purpose,
-            due_date: loan.due_date, payment_method: loan.payment_method,
-            payment_details: loan.payment_details, notification_id: notif?.id,
-          });
-          setSendingSingil(null);
-          Alert.alert(result.success ? 'Sent!' : 'Failed', result.success ? 'Singil email has been sent to the borrower.' : (result.error ?? 'Could not send email.'));
-        },
-      },
-    ]);
+  const sendSingilEmail = (loan: any) => {
+    setSingilTarget(loan);
+    setShowSingilConfirm(true);
+  };
+
+  const confirmSendSingil = async () => {
+    const loan = singilTarget;
+    setShowSingilConfirm(false);
+    if (!loan || sendingSingil === loan.id) return;
+
+    setSendingSingil(loan.id);
+    const { data: lenderProfile } = await supabase.from('users').select('full_name, email').eq('id', user!.id).single();
+    const { data: notif } = await supabase.from('email_notifications').insert({
+      recipient_email: loan.borrower?.email,
+      subject_email: `Payment Reminder: ₱${loan.amount_remaining} due`,
+      notification_type: 'singil', subject_cost_id: loan.id, status: 'pending',
+    }).select().single();
+    const result = await sendSingil({
+      recipient_email: loan.borrower?.email,
+      lender_name: lenderProfile?.full_name || lenderProfile?.email || 'Your lender',
+      amount: Number(loan.amount_remaining), purpose: loan.purpose,
+      due_date: loan.due_date, payment_method: loan.payment_method,
+      payment_details: loan.payment_details, notification_id: notif?.id,
+    });
+    setSendingSingil(null);
+    setSingilResultOk(result.success);
+    setSingilResultMsg(result.success ? 'Singil email has been sent to the borrower.' : (result.error ?? 'Could not send email.'));
+    setShowSingilResult(true);
   };
 
   const formatCurrency = (n: number) => `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
@@ -269,6 +288,39 @@ export default function PautangScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <AppModal
+        visible={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        icon="alert-circle"
+        iconColor={colors.error}
+        title="Error"
+        message={errorMsg}
+        buttons={[{ label: 'Got It', onPress: () => setShowErrorModal(false) }]}
+      />
+
+      <AppModal
+        visible={showSingilConfirm}
+        onClose={() => setShowSingilConfirm(false)}
+        icon="mail-outline"
+        iconColor={colors.pautangLedger}
+        title="Send Singil"
+        message={`Send a debt collection email to ${singilTarget?.borrower?.email || singilTarget?.lender?.email || ''}?`}
+        buttons={[
+          { label: 'Cancel', variant: 'secondary', onPress: () => setShowSingilConfirm(false) },
+          { label: 'Send', onPress: confirmSendSingil },
+        ]}
+      />
+
+      <AppModal
+        visible={showSingilResult}
+        onClose={() => setShowSingilResult(false)}
+        icon={singilResultOk ? 'checkmark-circle' : 'close-circle'}
+        iconColor={singilResultOk ? colors.success : colors.error}
+        title={singilResultOk ? 'Sent!' : 'Failed'}
+        message={singilResultMsg}
+        buttons={[{ label: 'OK', onPress: () => setShowSingilResult(false) }]}
+      />
     </View>
   );
 }
