@@ -171,14 +171,12 @@ export default function PersonalScreen() {
       const { error } = await supabase.from('bill_reminders').update({
         title: billTitle, amount,
         due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3,
-        category: billCategory,
       }).eq('id', editingBill.id);
       if (error) { showError(error.message); return; }
     } else {
       const { error } = await supabase.from('bill_reminders').insert({
         user_id: user!.id, title: billTitle, amount,
         due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3,
-        category: billCategory,
       });
       if (error) { showError(error.message); return; }
     }

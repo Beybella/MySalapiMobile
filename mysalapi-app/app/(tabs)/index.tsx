@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  RefreshControl, Image, Alert,
+  RefreshControl, Image, Alert, Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { Calendar } from 'react-native-calendars';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -16,6 +17,7 @@ interface DashboardStats {
   totalLoansOwed: number;
   upcomingBills: any[];
   overdueLoanCount: number;
+  markedDates: any;
 }
 
 export default function HomeScreen() {
@@ -28,19 +30,24 @@ export default function HomeScreen() {
     totalLoansOwed: 0,
     upcomingBills: [],
     overdueLoanCount: 0,
+    markedDates: {},
   });
   const [refreshing, setRefreshing] = useState(false);
   const [userName, setUserName] = useState('');
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [duesOnDate, setDuesOnDate] = useState<{ bills: any[], loans: any[] }>({ bills: [], loans: [] });
 
   const loadDashboard = async () => {
     if (!user) return;
     const today = new Date().toISOString().split('T')[0];
     const in7Days = new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0];
+    const in30Days = new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
     const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1)
       .toISOString().split('T')[0];
 
     const [{ data: expenses }, { data: bills }, { data: loansGiven },
-           { data: loansOwed }, { data: overdueLoans }, { data: profile }] =
+           { data: loansOwed }, { data: overdueLoans }, { data: profile },
+           { data: allBills }, { data: allLoans }] =
       await Promise.all([
         supabase.from('personal_expenses').select('amount').eq('user_id', user.id).gte('expense_date', startOfMonth),
         supabase.from('bill_reminders').select('*').eq('user_id', user.id).eq('is_paid', false)
@@ -49,20 +56,75 @@ export default function HomeScreen() {
         supabase.from('loans').select('amount_remaining').eq('borrower_id', user.id).neq('status', 'paid'),
         supabase.from('loans').select('id').eq('lender_id', user.id).lt('due_date', today).neq('status', 'paid'),
         supabase.from('users').select('full_name').eq('id', user.id).single(),
+        supabase.from('bill_reminders').select('due_date, title, amount').eq('user_id', user.id).eq('is_paid', false)
+          .gte('due_date', today).lte('due_date', in30Days),
+        supabase.from('loans').select('due_date, amount_remaining, borrower:borrower_id(full_name), lender:lender_id(full_name)')
+          .or(`lender_id.eq.${user.id},borrower_id.eq.${user.id}`)
+          .neq('status', 'paid').gte('due_date', today).lte('due_date', in30Days),
       ]);
 
     setUserName(profile?.full_name || user.email?.split('@')[0] || 'User');
+
+    // Build marked dates for calendar - one dot per type
+    const marked: any = {};
+    const dateData: any = {}; // Store actual data for each date
+    
+    // Track which dates have which types
+    (allBills || []).forEach((bill: any) => {
+      const date = bill.due_date;
+      if (!dateData[date]) {
+        dateData[date] = { bills: [], loans: [] };
+      }
+      dateData[date].bills.push(bill);
+    });
+
+    (allLoans || []).forEach((loan: any) => {
+      const date = loan.due_date;
+      if (!dateData[date]) {
+        dateData[date] = { bills: [], loans: [] };
+      }
+      dateData[date].loans.push(loan);
+    });
+
+    // Create marked dates with one dot per type
+    Object.keys(dateData).forEach((date) => {
+      marked[date] = { dots: [] };
+      
+      if (dateData[date].bills.length > 0) {
+        marked[date].dots.push({ key: 'bill', color: '#2196F3' });
+      }
+      if (dateData[date].loans.length > 0) {
+        marked[date].dots.push({ key: 'loan', color: '#FF5252' });
+      }
+    });
+
+    // Store dateData for click handling
+    (window as any).calendarDateData = dateData;
+
     setStats({
       totalExpenses: expenses?.reduce((s, e) => s + Number(e.amount), 0) || 0,
       totalLoansGiven: loansGiven?.reduce((s, l) => s + Number(l.amount_remaining), 0) || 0,
       totalLoansOwed: loansOwed?.reduce((s, l) => s + Number(l.amount_remaining), 0) || 0,
       upcomingBills: bills || [],
       overdueLoanCount: overdueLoans?.length || 0,
+      markedDates: marked,
     });
   };
 
   useEffect(() => { loadDashboard(); }, [user]);
   const onRefresh = async () => { setRefreshing(true); await loadDashboard(); setRefreshing(false); };
+
+  const handleDatePress = (day: any) => {
+    const dateData = (window as any).calendarDateData || {};
+    const data = dateData[day.dateString] || { bills: [], loans: [] };
+    
+    if (data.bills.length === 0 && data.loans.length === 0) {
+      return; // No dues on this date
+    }
+    
+    setSelectedDate(day.dateString);
+    setDuesOnDate(data);
+  };
 
   const handleSignOut = () => {
     Alert.alert(
@@ -82,11 +144,12 @@ export default function HomeScreen() {
   const styles = makeStyles(colors);
 
   return (
-    <ScrollView
-      style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-      showsVerticalScrollIndicator={false}
-    >
+    <>
+      <ScrollView
+        style={styles.container}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+        showsVerticalScrollIndicator={false}
+      >
       {/* ── Hero Header ── */}
       <View style={styles.hero}>
         <View style={styles.heroTop}>
@@ -170,6 +233,52 @@ export default function HomeScreen() {
         </ScrollView>
       </View>
 
+      {/* ── Calendar View ── */}
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Upcoming Dues Calendar</Text>
+          <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+        </View>
+        <View style={styles.calendarCard}>
+          <Calendar
+            markedDates={stats.markedDates}
+            markingType={'multi-dot'}
+            onDayPress={handleDatePress}
+            theme={{
+              backgroundColor: 'transparent',
+              calendarBackground: 'transparent',
+              textSectionTitleColor: colors.primary,
+              textSectionTitleFontWeight: '700',
+              selectedDayBackgroundColor: colors.primary,
+              selectedDayTextColor: '#ffffff',
+              todayTextColor: colors.primary,
+              todayBackgroundColor: colors.primary + '15',
+              dayTextColor: colors.textPrimary,
+              textDisabledColor: colors.textLight,
+              monthTextColor: colors.textPrimary,
+              textMonthFontWeight: '800',
+              textDayFontSize: 15,
+              textMonthFontSize: 17,
+              textDayHeaderFontSize: 13,
+              textDayHeaderFontWeight: '600',
+              arrowColor: colors.primary,
+              dotColor: colors.primary,
+            }}
+            style={styles.calendar}
+          />
+          <View style={styles.calendarLegend}>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#2196F3' }]} />
+              <Text style={styles.legendText}>Bills</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={[styles.legendDot, { backgroundColor: '#FF5252' }]} />
+              <Text style={styles.legendText}>Loans</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
       {/* ── Upcoming Bills ── */}
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
@@ -212,7 +321,73 @@ export default function HomeScreen() {
       </View>
 
       <View style={{ height: 24 }} />
-    </ScrollView>
+      </ScrollView>
+
+      {/* ── Dues Modal ── */}
+      <Modal
+        visible={selectedDate !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSelectedDate(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>
+                  {selectedDate ? format(new Date(selectedDate), 'MMM d, yyyy') : ''}
+                </Text>
+                <Text style={styles.modalSubtitle}>Dues on this date</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedDate(null)} style={styles.modalClose}>
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
+              {duesOnDate.bills.length > 0 && (
+                <View style={styles.duesSection}>
+                  <View style={styles.duesSectionHeader}>
+                    <View style={[styles.dueDot, { backgroundColor: '#2196F3' }]} />
+                    <Text style={styles.duesSectionTitle}>Bills ({duesOnDate.bills.length})</Text>
+                  </View>
+                  {duesOnDate.bills.map((bill: any, idx: number) => (
+                    <View key={idx} style={styles.dueItem}>
+                      <Text style={styles.dueItemTitle}>{bill.title}</Text>
+                      <Text style={styles.dueItemAmount}>{formatCurrency(Number(bill.amount))}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {duesOnDate.loans.length > 0 && (
+                <View style={styles.duesSection}>
+                  <View style={styles.duesSectionHeader}>
+                    <View style={[styles.dueDot, { backgroundColor: '#FF5252' }]} />
+                    <Text style={styles.duesSectionTitle}>Loans ({duesOnDate.loans.length})</Text>
+                  </View>
+                  {duesOnDate.loans.map((loan: any, idx: number) => (
+                    <View key={idx} style={styles.dueItem}>
+                      <Text style={styles.dueItemTitle}>
+                        {loan.borrower?.full_name || loan.lender?.full_name || 'Loan'}
+                      </Text>
+                      <Text style={styles.dueItemAmount}>{formatCurrency(Number(loan.amount_remaining))}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {duesOnDate.bills.length === 0 && duesOnDate.loans.length === 0 && (
+                <View style={styles.emptyDues}>
+                  <Ionicons name="calendar-outline" size={48} color={colors.textLight} />
+                  <Text style={styles.emptyDuesText}>No dues on this date</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -290,4 +465,146 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     billName: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
     billDate: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
     billAmount: { fontSize: 14, fontWeight: '700', color: colors.textPrimary },
+
+    // Calendar
+    calendarCard: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      padding: 16,
+      elevation: 3,
+      marginTop: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    calendar: {
+      borderRadius: 12,
+    },
+    calendarLegend: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      gap: 12,
+      marginTop: 16,
+      paddingTop: 16,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    legendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      backgroundColor: colors.background,
+      borderRadius: 20,
+    },
+    legendDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+    },
+    legendText: {
+      fontSize: 13,
+      color: colors.textPrimary,
+      fontWeight: '600',
+    },
+
+    // Modal
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: colors.surface,
+      borderRadius: 20,
+      width: '100%',
+      maxHeight: '80%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 12,
+      elevation: 8,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '800',
+      color: colors.textPrimary,
+    },
+    modalSubtitle: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    modalClose: {
+      padding: 4,
+    },
+    modalScroll: {
+      padding: 20,
+    },
+
+    // Dues sections
+    duesSection: {
+      marginBottom: 20,
+    },
+    duesSectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 12,
+    },
+    dueDot: {
+      width: 12,
+      height: 12,
+      borderRadius: 6,
+    },
+    duesSectionTitle: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
+    dueItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      backgroundColor: colors.background,
+      padding: 14,
+      borderRadius: 12,
+      marginBottom: 8,
+    },
+    dueItemTitle: {
+      fontSize: 14,
+      color: colors.textPrimary,
+      fontWeight: '600',
+      flex: 1,
+      marginRight: 12,
+    },
+    dueItemAmount: {
+      fontSize: 14,
+      color: colors.primary,
+      fontWeight: '700',
+    },
+    emptyDues: {
+      alignItems: 'center',
+      padding: 40,
+      gap: 12,
+    },
+    emptyDuesText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+    },
   });
