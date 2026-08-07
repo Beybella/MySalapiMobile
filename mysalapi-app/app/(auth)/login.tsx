@@ -56,11 +56,17 @@ export default function LoginScreen() {
       Alert.alert('Enter Email', 'Please enter your email address first, then tap Forgot Password.');
       return;
     }
-   const { error } = await supabase.auth.resetPasswordForEmail(email, {
+
+    // Directly attempt password reset - Supabase will only send if email exists
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: 'https://krizxei.github.io/MySalapiMobile/reset-password.html',
-    });   if (error) {
+    });
+    
+    if (error) {
+      // If there's an actual error from Supabase, show it
       Alert.alert('Error', error.message);
     } else {
+      // Success - but note: Supabase only sends if email exists in auth system
       setShowForgotSentModal(true);
     }
   };
