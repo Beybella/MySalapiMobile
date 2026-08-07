@@ -83,13 +83,21 @@ MAIL_FROM_NAME=MySalapi
 | Feature | Status |
 |---------|--------|
 | User Registration & Login (Supabase Auth) | ✅ |
-| Personal Expense Ledger | ✅ |
+| 6-digit PIN lock with biometric fallback | ✅ |
+| PIN lockout after 3 failed attempts | ✅ |
+| Forgot PIN via password verification | ✅ |
+| Change PIN from Profile | ✅ |
+| Change Password from Profile | ✅ |
+| Personal Expense Ledger with categories | ✅ |
+| Bill Reminders with category & edit/delete | ✅ |
 | Bill Reminders with email alerts | ✅ |
 | Pautang (Bilateral Loan) Ledger | ✅ |
 | Singil — automated debt collection email | ✅ |
 | Ambagan (Group Expense) Ledger | ✅ |
 | Group Singil email | ✅ |
 | Smart Budget Planner (Fund Sources) | ✅ |
+| Budget Goals with progress tracking | ✅ |
+| Spending Limits by category | ✅ |
 | Auto bill prioritization by due date | ✅ |
 | Shortfall detection & warnings | ✅ |
 | Budget health status (Healthy/At Risk/Critical) | ✅ |
@@ -99,3 +107,5 @@ MAIL_FROM_NAME=MySalapi
 | Daily cron for overdue loan notifications | ✅ |
 | PostgreSQL RLS security | ✅ |
 | Email notification tracking | ✅ |
+| Dark mode support | ✅ |
+| Drag-to-dismiss bottom sheet modals | ✅ |

@@ -11,6 +11,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- DROP ALL EXISTING TABLES (clean slate)
 -- ============================================================
 DROP TABLE IF EXISTS public.budget_allocations CASCADE;
+DROP TABLE IF EXISTS public.spending_limits CASCADE;
+DROP TABLE IF EXISTS public.budget_goals CASCADE;
 DROP TABLE IF EXISTS public.fund_sources CASCADE;
 DROP TABLE IF EXISTS public.email_notifications CASCADE;
 DROP TABLE IF EXISTS public.group_participants CASCADE;
@@ -101,6 +103,7 @@ CREATE TABLE public.bill_reminders (
   reminder_days_before INT NOT NULL DEFAULT 3,
   is_recurring         BOOLEAN NOT NULL DEFAULT FALSE,
   is_paid              BOOLEAN NOT NULL DEFAULT FALSE,
+  category             TEXT NOT NULL DEFAULT 'Other',
   created_at           TIMESTAMPTZ DEFAULT NOW(),
   updated_at           TIMESTAMPTZ DEFAULT NOW()
 );
@@ -217,6 +220,37 @@ CREATE TABLE public.budget_allocations (
 );
 
 -- ============================================================
+-- BUDGET GOALS (Smart Budget Planner — Goals Tab)
+-- ============================================================
+CREATE TABLE public.budget_goals (
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id        UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  name           TEXT NOT NULL,
+  target_amount  NUMERIC(12,2) NOT NULL CHECK (target_amount > 0),
+  current_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  category       TEXT NOT NULL DEFAULT 'Savings',
+  deadline       DATE,
+  status         TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','completed','cancelled')),
+  created_at     TIMESTAMPTZ DEFAULT NOW(),
+  updated_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- SPENDING LIMITS (Smart Budget Planner — Goals Tab)
+-- ============================================================
+CREATE TABLE public.spending_limits (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id          UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  category         TEXT NOT NULL,
+  limit_amount     NUMERIC(12,2) NOT NULL CHECK (limit_amount > 0),
+  period           TEXT NOT NULL DEFAULT 'monthly',
+  alert_threshold  INT NOT NULL DEFAULT 80,
+  is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at       TIMESTAMPTZ DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
 -- ROW LEVEL SECURITY
 -- ============================================================
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -229,6 +263,8 @@ ALTER TABLE public.group_participants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.email_notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.fund_sources ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.budget_allocations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.budget_goals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.spending_limits ENABLE ROW LEVEL SECURITY;
 
 -- ── USERS ────────────────────────────────────────────────────────────────
 CREATE POLICY "Anyone authenticated can read users"
@@ -347,6 +383,16 @@ CREATE POLICY "Own allocations"
   ON public.budget_allocations FOR ALL TO authenticated
   USING (auth.uid() = user_id);
 
+-- ── BUDGET GOALS ─────────────────────────────────────────────────────────
+CREATE POLICY "Own budget goals"
+  ON public.budget_goals FOR ALL TO authenticated
+  USING (auth.uid() = user_id);
+
+-- ── SPENDING LIMITS ───────────────────────────────────────────────────────
+CREATE POLICY "Own spending limits"
+  ON public.spending_limits FOR ALL TO authenticated
+  USING (auth.uid() = user_id);
+
 -- ============================================================
 -- VERIFY
 -- ============================================================
@@ -358,4 +404,6 @@ UNION ALL SELECT 'group_expenses',         count(*) FROM public.group_expenses
 UNION ALL SELECT 'group_participants',     count(*) FROM public.group_participants
 UNION ALL SELECT 'fund_sources',           count(*) FROM public.fund_sources
 UNION ALL SELECT 'email_notifications',    count(*) FROM public.email_notifications
-UNION ALL SELECT 'budget_allocations',     count(*) FROM public.budget_allocations;
+UNION ALL SELECT 'budget_allocations',     count(*) FROM public.budget_allocations
+UNION ALL SELECT 'budget_goals',           count(*) FROM public.budget_goals
+UNION ALL SELECT 'spending_limits',        count(*) FROM public.spending_limits;

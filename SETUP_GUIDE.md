@@ -74,13 +74,12 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your_anon_key_here
 SUPABASE_SERVICE_KEY=your_service_key_here
 
-# ===== EMAIL (Mailtrap SMTP) =====
+# ===== EMAIL (Brevo SMTP) =====
 MAIL_MAILER=smtp
-MAIL_HOST=sandbox.smtp.mailtrap.io
 MAIL_HOST=smtp-relay.brevo.com
 MAIL_PORT=587
 MAIL_ENCRYPTION=tls
-MAIL_USERNAME=your_email_here
+MAIL_USERNAME=your_brevo_smtp_login_here
 MAIL_PASSWORD=your_brevo_smtp_key_here
 MAIL_FROM_ADDRESS=noreply@mysalapi.com
 MAIL_FROM_NAME=MySalapi
@@ -125,17 +124,14 @@ BCRYPT_ROUNDS=12
    - **Anon Key** → `SUPABASE_ANON_KEY`
    - **Service Role Key** → `SUPABASE_SERVICE_KEY`
 
-### 2.3 Get Your Mailtrap SMTP Credentials
+### 2.3 Get Your Brevo (Email) Credentials
 
-1. Go to [https://mailtrap.io/](https://mailtrap.io/) and log in
-2. Select **Email Sending** → **Integrations**
-3. Choose **SMTP**
-4. Copy the credentials:
-   - **Host**: sandbox.smtp.mailtrap.io
-   - **Port**: 2525
-   - **Username**: (from Mailtrap credentials)
-   - **Password**: (from Mailtrap credentials)
-   - **API Token**: (from your API settings)
+1. Go to [https://app.brevo.com](https://app.brevo.com) and log in (or create a free account)
+2. Go to **SMTP & API** in the left sidebar
+3. **For SMTP:** copy your login and generate an SMTP key — use these for `MAIL_USERNAME` and `MAIL_PASSWORD`
+4. **For API:** click **API Keys** tab → generate a key → use it for `BREVO_API_KEY`
+
+> The app uses Brevo's HTTP API for transactional emails (Singil, bill reminders, shortfall alerts). Free tier allows 300 emails/day with no domain required.
 
 ---
 
@@ -225,25 +221,23 @@ php artisan test
 
 When debt collection email is triggered:
 
-1. **Check Mailtrap Inbox**:
-   - Go to [https://mailtrap.io/](https://mailtrap.io/) → Email Testing → Inbox
-   - You'll see the sent email there
-
+1. **Check the recipient's inbox directly** — Brevo sends real emails (free tier: 300/day)
 2. **Check Backend Logs**:
    ```bash
-   tail -f mysalapi-backend/storage/logs/laravel.log
+   Get-Content mysalapi-backend\storage\logs\laravel.log -Tail 30
    ```
+3. **Check Brevo dashboard** for send status: https://app.brevo.com → Transactional → Logs
 
 ---
 
 ## 🐛 Common Issues & Fixes
 
-### Issue: SMTP Connection Refused
+### Issue: SMTP Connection Refused / Email not sending
 **Solution**:
 ```bash
-# Check if MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD are correct
-# Verify Mailtrap credentials are copied correctly
-# Make sure MAIL_ENCRYPTION=tls is set
+# Check BREVO_API_KEY is set correctly in .env
+# Verify your IP is authorized in Brevo → Settings → Security → Authorized IPs
+# Run php artisan config:clear after changing .env
 ```
 
 ### Issue: "Connection refused" on http://localhost:8000
@@ -372,7 +366,7 @@ eas build --platform android
 - **Laravel Docs**: https://laravel.com/docs
 - **React Native Docs**: https://reactnative.dev/docs/getting-started
 - **Expo Docs**: https://docs.expo.dev
-- **Mailtrap Docs**: https://mailtrap.io/api/docs
+- **Brevo Docs**: https://developers.brevo.com
 
 ---
 
