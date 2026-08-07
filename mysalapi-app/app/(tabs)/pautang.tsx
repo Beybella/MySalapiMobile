@@ -12,6 +12,7 @@ import { format, isPast } from 'date-fns';
 import { sendSingil } from '../../lib/api';
 import DateInput from '../../components/DateInput';
 import AppModal from '../../components/AppModal';
+import DraggableModal from '../../components/DraggableModal';
 
 const PAYMENT_METHODS = ['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'];
 
@@ -228,66 +229,93 @@ export default function PautangScreen() {
         </TouchableOpacity>
       )}
 
-      <Modal visible={showAddLoan} animationType="slide" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={styles.modal}>
+      <DraggableModal visible={showAddLoan} onClose={() => setShowAddLoan(false)}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Create Loan</Text>
               <TouchableOpacity onPress={() => setShowAddLoan(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
+                <Ionicons name="close" size={16} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <TextInput style={styles.input} placeholder="Borrower's email (must be MySalapi user)" placeholderTextColor={colors.textLight} value={borrowerEmail} onChangeText={setBorrowerEmail} keyboardType="email-address" autoCapitalize="none" />
-              <TextInput style={styles.input} placeholder="Amount (₱)" placeholderTextColor={colors.textLight} value={loanAmount} onChangeText={setLoanAmount} keyboardType="decimal-pad" />
-              <TextInput style={styles.input} placeholder="Purpose" placeholderTextColor={colors.textLight} value={loanPurpose} onChangeText={setLoanPurpose} />
-              <DateInput label="Loan Date" value={loanDate} onChange={setLoanDate} />
-              <DateInput label="Due Date" value={dueDate} onChange={setDueDate} />
-              <Text style={styles.inputLabel}>Payment Method</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                {PAYMENT_METHODS.map((m) => (
-                  <TouchableOpacity key={m} style={[styles.catChip, paymentMethod === m && styles.catChipActive]} onPress={() => setPaymentMethod(m)}>
-                    <Text style={[styles.catChipText, paymentMethod === m && styles.catChipTextActive]}>{m}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <TextInput style={styles.input} placeholder="Payment details (e.g. GCash number)" placeholderTextColor={colors.textLight} value={paymentDetails} onChangeText={setPaymentDetails} />
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Borrower's Email</Text>
+                <TextInput style={styles.input} placeholder="must be a MySalapi user" placeholderTextColor={colors.textLight} value={borrowerEmail} onChangeText={setBorrowerEmail} keyboardType="email-address" autoCapitalize="none" />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Amount (₱)</Text>
+                <TextInput style={styles.input} placeholder="0.00" placeholderTextColor={colors.textLight} value={loanAmount} onChangeText={setLoanAmount} keyboardType="decimal-pad" />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Purpose</Text>
+                <TextInput style={styles.input} placeholder="e.g. Emergency, Business" placeholderTextColor={colors.textLight} value={loanPurpose} onChangeText={setLoanPurpose} />
+              </View>
+              <View style={styles.fieldGroup}>
+                <DateInput label="Loan Date" value={loanDate} onChange={setLoanDate} />
+              </View>
+              <View style={styles.fieldGroup}>
+                <DateInput label="Due Date" value={dueDate} onChange={setDueDate} />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Payment Method</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {PAYMENT_METHODS.map((m) => (
+                      <TouchableOpacity key={m} style={[styles.catChip, paymentMethod === m && styles.catChipActive]} onPress={() => setPaymentMethod(m)}>
+                        <Text style={[styles.catChipText, paymentMethod === m && styles.catChipTextActive]}>{m}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Payment Details</Text>
+                <TextInput style={styles.input} placeholder="e.g. GCash number" placeholderTextColor={colors.textLight} value={paymentDetails} onChangeText={setPaymentDetails} />
+              </View>
               <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.pautangLedger }]} onPress={addLoan}>
                 <Text style={styles.saveBtnText}>Create Loan</Text>
               </TouchableOpacity>
             </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </DraggableModal>
 
-      <Modal visible={showRecordPayment} animationType="slide" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={styles.modal}>
+      <DraggableModal visible={showRecordPayment} onClose={() => setShowRecordPayment(false)}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Record Payment</Text>
               <TouchableOpacity onPress={() => setShowRecordPayment(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
+                <Ionicons name="close" size={16} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              {selectedLoan && <Text style={styles.modalSub}>Remaining: {formatCurrency(selectedLoan.amount_remaining)}</Text>}
-              <TextInput style={styles.input} placeholder="Amount paid (₱)" placeholderTextColor={colors.textLight} value={payAmount} onChangeText={setPayAmount} keyboardType="decimal-pad" />
-              <TextInput style={styles.input} placeholder="Payment date (YYYY-MM-DD)" placeholderTextColor={colors.textLight} value={payDate} onChangeText={setPayDate} />
-              <Text style={styles.inputLabel}>Payment Method</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                {PAYMENT_METHODS.map((m) => (
-                  <TouchableOpacity key={m} style={[styles.catChip, payMethod === m && styles.catChipActive]} onPress={() => setPayMethod(m)}>
-                    <Text style={[styles.catChipText, payMethod === m && styles.catChipTextActive]}>{m}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              {selectedLoan && (
+                <View style={{ backgroundColor: colors.pautangLedger + '12', borderRadius: 14, padding: 16, marginBottom: 20, borderWidth: 1.5, borderColor: colors.pautangLedger + '30' }}>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 4 }}>Remaining Balance</Text>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: colors.pautangLedger }}>{formatCurrency(selectedLoan.amount_remaining)}</Text>
+                </View>
+              )}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Amount Paid (₱)</Text>
+                <TextInput style={styles.input} placeholder="0.00" placeholderTextColor={colors.textLight} value={payAmount} onChangeText={setPayAmount} keyboardType="decimal-pad" />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Payment Date</Text>
+                <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textLight} value={payDate} onChangeText={setPayDate} />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Payment Method</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {PAYMENT_METHODS.map((m) => (
+                      <TouchableOpacity key={m} style={[styles.catChip, payMethod === m && styles.catChipActive]} onPress={() => setPayMethod(m)}>
+                        <Text style={[styles.catChipText, payMethod === m && styles.catChipTextActive]}>{m}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
               <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.pautangLedger }]} onPress={recordPayment}>
                 <Text style={styles.saveBtnText}>Save Payment</Text>
               </TouchableOpacity>
             </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </DraggableModal>
 
       <AppModal
         visible={showErrorModal}
@@ -429,17 +457,48 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       elevation: 8,
     },
     modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-    modal: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '82%' },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-    modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
-    closeBtn: { padding: 4, borderRadius: 20, backgroundColor: colors.border },
-    modalSub: { fontSize: 14, color: colors.textSecondary, marginBottom: 12 },
-    input: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 11, fontSize: 14, marginBottom: 10, color: colors.textPrimary, backgroundColor: colors.background },
-    inputLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
-    catChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: colors.border, marginRight: 8 },
+    modalBackdrop: { flex: 1 },
+    modal: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 28, borderTopRightRadius: 28,
+      paddingHorizontal: 24, paddingTop: 12, paddingBottom: 32,
+      maxHeight: '82%',
+    },
+    modalDragHandle: {
+      width: 40, height: 4, borderRadius: 2,
+      backgroundColor: colors.border, alignSelf: 'center', marginBottom: 20,
+    },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+    modalTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.2 },
+    closeBtn: {
+      width: 32, height: 32, borderRadius: 16,
+      backgroundColor: colors.borderLight,
+      justifyContent: 'center', alignItems: 'center',
+    },
+    modalSub: { fontSize: 14, color: colors.textSecondary, marginBottom: 16, lineHeight: 20 },
+    fieldGroup: { marginBottom: 20 },
+    input: {
+      borderWidth: 1.5, borderColor: colors.border, borderRadius: 14,
+      paddingHorizontal: 16, paddingVertical: 14,
+      fontSize: 15, color: colors.textPrimary, backgroundColor: colors.background,
+    },
+    inputLabel: {
+      fontSize: 12, fontWeight: '700', color: colors.textSecondary,
+      textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8,
+    },
+    catChip: {
+      paddingHorizontal: 14, paddingVertical: 8,
+      borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, marginRight: 8,
+      backgroundColor: colors.background,
+    },
     catChipActive: { backgroundColor: colors.pautangLedger, borderColor: colors.pautangLedger },
-    catChipText: { fontSize: 13, color: colors.textSecondary },
-    catChipTextActive: { color: '#fff', fontWeight: '600' },
-    saveBtn: { padding: 14, borderRadius: 10, backgroundColor: colors.primary, alignItems: 'center', marginTop: 6, marginBottom: 8 },
-    saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    catChipText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
+    catChipTextActive: { color: '#fff', fontWeight: '700' },
+    saveBtn: {
+      padding: 16, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center',
+      marginTop: 8, marginBottom: 10,
+      shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+    },
+    saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: 0.3 },
   });

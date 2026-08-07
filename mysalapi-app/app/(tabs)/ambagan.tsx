@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { format } from 'date-fns';
 import DateInput from '../../components/DateInput';
+import DraggableModal from '../../components/DraggableModal';
 
 // One entry in custom split mode
 interface CustomMember {
@@ -302,150 +303,133 @@ export default function AmbaganScreen() {
       </TouchableOpacity>
 
       {/* Create Group Modal */}
-      <Modal visible={showCreate} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <View style={styles.modal}>
+      <DraggableModal visible={showCreate} onClose={() => { setShowCreate(false); resetForm(); }}>
             {/* Modal header */}
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Create Group Expense</Text>
               <TouchableOpacity onPress={() => { setShowCreate(false); resetForm(); }} style={styles.closeBtn}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
+                <Ionicons name="close" size={16} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {/* Common fields */}
-              <Text style={styles.inputLabel}>Title</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Dinner at Jollibee"
-                placeholderTextColor={colors.textLight}
-                value={title}
-                onChangeText={setTitle}
-              />
+              <View style={{ marginBottom: 20 }}>
+                <Text style={styles.inputLabel}>Title</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Dinner at Jollibee"
+                  placeholderTextColor={colors.textLight}
+                  value={title}
+                  onChangeText={setTitle}
+                />
+              </View>
 
-              <DateInput label="Expense Date" value={expenseDate} onChange={setExpenseDate} />
+              <View style={{ marginBottom: 20 }}>
+                <DateInput label="Expense Date" value={expenseDate} onChange={setExpenseDate} />
+              </View>
 
-              <Text style={styles.inputLabel}>Category</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Food, Transport, etc."
-                placeholderTextColor={colors.textLight}
-                value={category}
-                onChangeText={setCategory}
-              />
+              <View style={{ marginBottom: 20 }}>
+                <Text style={styles.inputLabel}>Category</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Food, Transport, etc."
+                  placeholderTextColor={colors.textLight}
+                  value={category}
+                  onChangeText={setCategory}
+                />
+              </View>
 
               {/* Split mode toggle */}
-              <Text style={styles.inputLabel}>Split Method</Text>
-              <View style={styles.splitToggle}>
-                <TouchableOpacity
-                  style={[styles.splitOption, splitMode === 'equal' && styles.splitOptionActive]}
-                  onPress={() => setSplitMode('equal')}
-                >
-                  <Ionicons
-                    name="git-branch-outline"
-                    size={16}
-                    color={splitMode === 'equal' ? '#fff' : colors.textSecondary}
-                  />
-                  <Text style={[styles.splitOptionText, splitMode === 'equal' && styles.splitOptionTextActive]}>
-                    Equal Split
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.splitOption, splitMode === 'custom' && styles.splitOptionActive]}
-                  onPress={() => setSplitMode('custom')}
-                >
-                  <Ionicons
-                    name="options-outline"
-                    size={16}
-                    color={splitMode === 'custom' ? '#fff' : colors.textSecondary}
-                  />
-                  <Text style={[styles.splitOptionText, splitMode === 'custom' && styles.splitOptionTextActive]}>
-                    Custom Split
-                  </Text>
-                </TouchableOpacity>
+              <View style={{ marginBottom: 20 }}>
+                <Text style={styles.inputLabel}>Split Method</Text>
+                <View style={styles.splitToggle}>
+                  <TouchableOpacity
+                    style={[styles.splitOption, splitMode === 'equal' && styles.splitOptionActive]}
+                    onPress={() => setSplitMode('equal')}
+                  >
+                    <Ionicons name="git-branch-outline" size={16} color={splitMode === 'equal' ? '#fff' : colors.textSecondary} />
+                    <Text style={[styles.splitOptionText, splitMode === 'equal' && styles.splitOptionTextActive]}>Equal Split</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.splitOption, splitMode === 'custom' && styles.splitOptionActive]}
+                    onPress={() => setSplitMode('custom')}
+                  >
+                    <Ionicons name="options-outline" size={16} color={splitMode === 'custom' ? '#fff' : colors.textSecondary} />
+                    <Text style={[styles.splitOptionText, splitMode === 'custom' && styles.splitOptionTextActive]}>Custom Split</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {/* ── Equal split fields ── */}
               {splitMode === 'equal' && (
                 <>
-                  <Text style={styles.inputLabel}>Total Amount (₱)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="0.00"
-                    placeholderTextColor={colors.textLight}
-                    value={totalAmount}
-                    onChangeText={setTotalAmount}
-                    keyboardType="decimal-pad"
-                  />
-
-                  <View style={styles.customHeader}>
-                    <Text style={styles.inputLabel}>Members</Text>
-                    {equalMembers.filter(Boolean).length > 0 && (
-                      <Text style={styles.customTotal}>
-                        {equalMembers.filter(Boolean).length + 1} people · {totalAmount
-                          ? `₱${(parseFloat(totalAmount) / (equalMembers.filter(Boolean).length + 1)).toFixed(2)} each`
-                          : 'each'}
-                      </Text>
-                    )}
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={styles.inputLabel}>Total Amount (₱)</Text>
+                    <TextInput
+                      style={styles.input} placeholder="0.00"
+                      placeholderTextColor={colors.textLight}
+                      value={totalAmount} onChangeText={setTotalAmount} keyboardType="decimal-pad"
+                    />
                   </View>
-                  <Text style={styles.inputNote}>
-                    Each member's email. The total will be split equally among all members including you.
-                  </Text>
+
+                  <View style={{ marginBottom: 8 }}>
+                    <View style={styles.customHeader}>
+                      <Text style={styles.inputLabel}>Members</Text>
+                      {equalMembers.filter(Boolean).length > 0 && totalAmount ? (
+                        <Text style={styles.customTotal}>
+                          {equalMembers.filter(Boolean).length + 1} people · ₱{(parseFloat(totalAmount) / (equalMembers.filter(Boolean).length + 1)).toFixed(2)} each
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.inputNote}>
+                      The total will be split equally including you.
+                    </Text>
+                  </View>
 
                   {equalMembers.map((email, index) => (
-                    <View key={index} style={styles.memberRow}>
+                    <View key={index} style={[styles.memberRow, { marginBottom: 10 }]}>
                       <TextInput
                         style={[styles.input, styles.memberInput]}
                         placeholder={`Member ${index + 1} email`}
                         placeholderTextColor={colors.textLight}
-                        value={email}
-                        onChangeText={(v) => updateEqualMember(index, v)}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
+                        value={email} onChangeText={(v) => updateEqualMember(index, v)}
+                        autoCapitalize="none" keyboardType="email-address"
                       />
                       {equalMembers.length > 1 && (
-                        <TouchableOpacity
-                          style={styles.inlineRemoveBtn}
-                          onPress={() => removeEqualMember(index)}
-                        >
+                        <TouchableOpacity style={styles.inlineRemoveBtn} onPress={() => removeEqualMember(index)}>
                           <Ionicons name="trash-outline" size={16} color={colors.error} />
                         </TouchableOpacity>
                       )}
                     </View>
                   ))}
 
-                  <TouchableOpacity style={styles.addMemberBtn} onPress={addEqualMember}>
+                  <TouchableOpacity style={[styles.addMemberBtn, { marginBottom: 20 }]} onPress={addEqualMember}>
                     <Ionicons name="add-circle-outline" size={18} color={colors.ambaganLedger} />
                     <Text style={styles.addMemberText}>Add Another Member</Text>
                   </TouchableOpacity>
 
-                  <Text style={styles.inputLabel}>Payment Method</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
-                    {['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'].map((m) => (
-                      <TouchableOpacity
-                        key={m}
-                        style={[styles.methodChip, paymentMethod === m && styles.methodChipActive]}
-                        onPress={() => setPaymentMethod(m)}
-                      >
-                        <Text style={[styles.methodChipText, paymentMethod === m && styles.methodChipTextActive]}>{m}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Payment details (e.g. GCash number 09XXXXXXXXX)"
-                    placeholderTextColor={colors.textLight}
-                    value={paymentDetails}
-                    onChangeText={setPaymentDetails}
-                  />
-                  <TouchableOpacity
-                    style={[styles.saveBtn, { backgroundColor: colors.ambaganLedger }]}
-                    onPress={createEqualGroup}
-                  >
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={styles.inputLabel}>Payment Method</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'].map((m) => (
+                          <TouchableOpacity key={m} style={[styles.methodChip, paymentMethod === m && styles.methodChipActive]} onPress={() => setPaymentMethod(m)}>
+                            <Text style={[styles.methodChipText, paymentMethod === m && styles.methodChipTextActive]}>{m}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </ScrollView>
+                  </View>
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={styles.inputLabel}>Payment Details</Text>
+                    <TextInput
+                      style={styles.input} placeholder="e.g. GCash number 09XXXXXXXXX"
+                      placeholderTextColor={colors.textLight}
+                      value={paymentDetails} onChangeText={setPaymentDetails}
+                    />
+                  </View>
+                  <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.ambaganLedger, shadowColor: colors.ambaganLedger }]} onPress={createEqualGroup}>
                     <Text style={styles.saveBtnText}>Create Group</Text>
                   </TouchableOpacity>
                 </>
@@ -454,85 +438,70 @@ export default function AmbaganScreen() {
               {/* ── Custom split fields ── */}
               {splitMode === 'custom' && (
                 <>
-                  <View style={styles.customHeader}>
-                    <Text style={styles.inputLabel}>Members & Amounts</Text>
-                    {customTotal > 0 && (
-                      <Text style={styles.customTotal}>
-                        Total: {formatCurrency(customTotal)}
-                      </Text>
-                    )}
+                  <View style={{ marginBottom: 8 }}>
+                    <View style={styles.customHeader}>
+                      <Text style={styles.inputLabel}>Members & Amounts</Text>
+                      {customTotal > 0 && <Text style={styles.customTotal}>Total: {formatCurrency(customTotal)}</Text>}
+                    </View>
+                    <Text style={styles.inputNote}>Enter each member's email and how much they owe you.</Text>
                   </View>
-                  <Text style={styles.inputNote}>
-                    Enter each member's email and how much they owe you.
-                  </Text>
 
                   {customMembers.map((member, index) => (
-                    <View key={index} style={styles.memberRow}>
+                    <View key={index} style={[styles.memberRow, { marginBottom: 10 }]}>
                       <TextInput
-                        style={[styles.input, { flex: 2, marginBottom: 0, marginRight: 8 }]}
+                        style={[styles.input, { flex: 2, marginRight: 8 }]}
                         placeholder="email@example.com"
                         placeholderTextColor={colors.textLight}
-                        value={member.email}
-                        onChangeText={(v) => updateCustomMember(index, 'email', v)}
-                        autoCapitalize="none"
-                        keyboardType="email-address"
+                        value={member.email} onChangeText={(v) => updateCustomMember(index, 'email', v)}
+                        autoCapitalize="none" keyboardType="email-address"
                       />
                       <TextInput
-                        style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                        style={[styles.input, { flex: 1 }]}
                         placeholder="₱0.00"
                         placeholderTextColor={colors.textLight}
-                        value={member.amount}
-                        onChangeText={(v) => updateCustomMember(index, 'amount', v)}
+                        value={member.amount} onChangeText={(v) => updateCustomMember(index, 'amount', v)}
                         keyboardType="decimal-pad"
                       />
                       {customMembers.length > 1 && (
-                        <TouchableOpacity
-                          style={styles.inlineRemoveBtn}
-                          onPress={() => removeCustomMember(index)}
-                        >
+                        <TouchableOpacity style={styles.inlineRemoveBtn} onPress={() => removeCustomMember(index)}>
                           <Ionicons name="trash-outline" size={16} color={colors.error} />
                         </TouchableOpacity>
                       )}
                     </View>
                   ))}
 
-                  <TouchableOpacity style={styles.addMemberBtn} onPress={addCustomMember}>
+                  <TouchableOpacity style={[styles.addMemberBtn, { marginBottom: 20 }]} onPress={addCustomMember}>
                     <Ionicons name="add-circle-outline" size={18} color={colors.ambaganLedger} />
                     <Text style={styles.addMemberText}>Add Another Member</Text>
                   </TouchableOpacity>
 
-                  <Text style={styles.inputLabel}>Payment Method</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
-                    {['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'].map((m) => (
-                      <TouchableOpacity
-                        key={m}
-                        style={[styles.methodChip, paymentMethod === m && styles.methodChipActive]}
-                        onPress={() => setPaymentMethod(m)}
-                      >
-                        <Text style={[styles.methodChipText, paymentMethod === m && styles.methodChipTextActive]}>{m}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Payment details (e.g. GCash number 09XXXXXXXXX)"
-                    placeholderTextColor={colors.textLight}
-                    value={paymentDetails}
-                    onChangeText={setPaymentDetails}
-                  />
-
-                  <TouchableOpacity
-                    style={[styles.saveBtn, { backgroundColor: colors.ambaganLedger, marginTop: 12 }]}
-                    onPress={createCustomGroup}
-                  >
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={styles.inputLabel}>Payment Method</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'].map((m) => (
+                          <TouchableOpacity key={m} style={[styles.methodChip, paymentMethod === m && styles.methodChipActive]} onPress={() => setPaymentMethod(m)}>
+                            <Text style={[styles.methodChipText, paymentMethod === m && styles.methodChipTextActive]}>{m}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </ScrollView>
+                  </View>
+                  <View style={{ marginBottom: 20 }}>
+                    <Text style={styles.inputLabel}>Payment Details</Text>
+                    <TextInput
+                      style={styles.input} placeholder="e.g. GCash number 09XXXXXXXXX"
+                      placeholderTextColor={colors.textLight}
+                      value={paymentDetails} onChangeText={setPaymentDetails}
+                    />
+                  </View>
+                  <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.ambaganLedger, shadowColor: colors.ambaganLedger, marginTop: 4 }]} onPress={createCustomGroup}>
                     <Text style={styles.saveBtnText}>Create Group</Text>
                   </TouchableOpacity>
                 </>
               )}
             </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </DraggableModal>
     </View>
   );
 }
@@ -596,19 +565,40 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     },
     // Modal
     modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-    modal: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '90%' },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-    modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
-    closeBtn: { padding: 4, borderRadius: 20, backgroundColor: colors.border },
-    inputLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
+    modalBackdrop: { flex: 1 },
+    modal: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 28, borderTopRightRadius: 28,
+      paddingHorizontal: 24, paddingTop: 12, paddingBottom: 32,
+      maxHeight: '90%',
+    },
+    modalDragHandle: {
+      width: 40, height: 4, borderRadius: 2,
+      backgroundColor: colors.border, alignSelf: 'center', marginBottom: 20,
+    },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+    modalTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.2 },
+    closeBtn: {
+      width: 32, height: 32, borderRadius: 16,
+      backgroundColor: colors.borderLight,
+      justifyContent: 'center', alignItems: 'center',
+    },
+    inputLabel: {
+      fontSize: 12, fontWeight: '700', color: colors.textSecondary,
+      textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8,
+    },
     input: {
-      borderWidth: 1, borderColor: colors.border, borderRadius: 10,
-      padding: 11, fontSize: 14, marginBottom: 10,
+      borderWidth: 1.5, borderColor: colors.border, borderRadius: 14,
+      paddingHorizontal: 16, paddingVertical: 14,
+      fontSize: 15, marginBottom: 0,
       color: colors.textPrimary, backgroundColor: colors.background,
     },
-    inputNote: { fontSize: 12, color: colors.textLight, marginBottom: 10, lineHeight: 18 },
-    saveBtn: { padding: 14, borderRadius: 10, alignItems: 'center', marginBottom: 8 },
-    saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    inputNote: { fontSize: 12, color: colors.textLight, marginTop: 6, marginBottom: 0, lineHeight: 18 },
+    saveBtn: {
+      padding: 16, borderRadius: 14, alignItems: 'center', marginBottom: 8,
+      shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+    },
+    saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: 0.3 },
     // Split toggle
     splitToggle: { flexDirection: 'row', gap: 10, marginBottom: 16 },
     splitOption: {

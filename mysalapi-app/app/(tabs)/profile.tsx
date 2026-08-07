@@ -9,6 +9,7 @@ import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import AppModal from '../../components/AppModal';
+import DraggableModal from '../../components/DraggableModal';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -28,6 +29,92 @@ export default function ProfileScreen() {
   const [billReminders, setBillReminders] = useState(true);
   const [loanReminders, setLoanReminders] = useState(true);
   const [groupReminders, setGroupReminders] = useState(true);
+
+  // ── Security — Change PIN ─────────────────────────────────────────────
+  const PIN_KEY = `mysalapi_pin_${user?.id}`;
+  const [showChangePinModal, setShowChangePinModal] = useState(false);
+  const [pinStep, setPinStep] = useState<'verify' | 'new' | 'confirm'>('verify');
+  const [currentPinInput, setCurrentPinInput] = useState('');
+  const [newPinInput, setNewPinInput] = useState('');
+  const [confirmPinInput, setConfirmPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [pinLoading, setPinLoading] = useState(false);
+
+  const openChangePinModal = () => {
+    setPinStep('verify');
+    setCurrentPinInput(''); setNewPinInput(''); setConfirmPinInput(''); setPinError('');
+    setShowChangePinModal(true);
+  };
+
+  const handlePinStepSubmit = async () => {
+    setPinError('');
+    if (pinStep === 'verify') {
+      const saved = await SecureStore.getItemAsync(PIN_KEY);
+      if (!saved) {
+        setPinStep('new');
+        return;
+      }
+      if (currentPinInput.length !== 6) { setPinError('PIN must be exactly 6 digits.'); return; }
+      if (currentPinInput !== saved) {
+        setPinError('Incorrect current PIN.'); return;
+      }
+      setPinStep('new');
+    } else if (pinStep === 'new') {
+      if (newPinInput.length !== 6) { setPinError('PIN must be exactly 6 digits.'); return; }
+      setPinStep('confirm');
+    } else {
+      if (confirmPinInput.length !== 6) { setPinError('PIN must be exactly 6 digits.'); return; }
+      if (confirmPinInput !== newPinInput) { setPinError('PINs do not match.'); return; }
+      await SecureStore.setItemAsync(PIN_KEY, newPinInput);
+      setShowChangePinModal(false);
+      setShowPinSuccessModal(true);
+    }
+  };
+  const [showPinSuccessModal, setShowPinSuccessModal] = useState(false);
+
+  // ── Security — Change Password ────────────────────────────────────────
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [showPasswordSuccessModal, setShowPasswordSuccessModal] = useState(false);
+
+  const openChangePasswordModal = () => {
+    setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setPasswordError('');
+    setShowChangePasswordModal(true);
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError('');
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('All fields are required.'); return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters.'); return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match.'); return;
+    }
+    setPasswordLoading(true);
+    // Verify current password first
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user!.email!, password: currentPassword,
+    });
+    if (verifyError) {
+      setPasswordLoading(false);
+      setPasswordError('Current password is incorrect.'); return;
+    }
+    // Update password
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    setPasswordLoading(false);
+    if (updateError) {
+      setPasswordError(updateError.message); return;
+    }
+    setShowChangePasswordModal(false);
+    setShowPasswordSuccessModal(true);
+  };
 
   useEffect(() => {
     loadProfile();
@@ -77,7 +164,6 @@ const handleSignOut = () => {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
-            await SecureStore.deleteItemAsync(`mysalapi_pin_${user?.id}`);
             signOut();
           },
         },
@@ -197,6 +283,35 @@ const handleSignOut = () => {
         ))}
       </View>
 
+      {/* Security */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Security</Text>
+        <TouchableOpacity style={styles.securityRow} onPress={openChangePinModal}>
+          <View style={styles.securityLeft}>
+            <View style={[styles.securityIcon, { backgroundColor: colors.primary + '15' }]}>
+              <Ionicons name="keypad-outline" size={18} color={colors.primary} />
+            </View>
+            <View>
+              <Text style={styles.securityLabel}>Change PIN</Text>
+              <Text style={styles.securitySub}>Update your 6-digit app lock PIN</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.securityRow} onPress={openChangePasswordModal}>
+          <View style={styles.securityLeft}>
+            <View style={[styles.securityIcon, { backgroundColor: colors.pautangLedger + '15' }]}>
+              <Ionicons name="lock-closed-outline" size={18} color={colors.pautangLedger} />
+            </View>
+            <View>
+              <Text style={styles.securityLabel}>Change Password</Text>
+              <Text style={styles.securitySub}>Update your account password</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+        </TouchableOpacity>
+      </View>
+
       {/* About */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>About MySalapi</Text>
@@ -223,6 +338,107 @@ const handleSignOut = () => {
       </TouchableOpacity>
 
       <View style={{ height: 40 }} />
+
+      {/* ── Change PIN Modal ── */}
+      <DraggableModal visible={showChangePinModal} onClose={() => setShowChangePinModal(false)}>
+        <Text style={styles.modalTitle}>
+          {pinStep === 'verify' ? 'Verify Current PIN' : pinStep === 'new' ? 'Enter New PIN' : 'Confirm New PIN'}
+        </Text>
+        <Text style={styles.modalSub}>
+          {pinStep === 'verify' ? 'Enter your current 6-digit PIN to continue.' : pinStep === 'new' ? 'Choose a new 6-digit PIN.' : 'Re-enter your new PIN to confirm.'}
+        </Text>
+
+        {/* 6-dot indicator */}
+        <View style={styles.pinDots}>
+          {[0,1,2,3,4,5].map((i) => {
+            const val = pinStep === 'verify' ? currentPinInput : pinStep === 'new' ? newPinInput : confirmPinInput;
+            return (
+              <View key={i} style={[styles.pinDot, i < val.length && styles.pinDotFilled]} />
+            );
+          })}
+        </View>
+        <Text style={styles.pinHint}>6 digits required</Text>
+
+        {pinStep === 'verify' && (
+          <TextInput
+            style={styles.secInput} placeholder="Enter 6-digit PIN"
+            placeholderTextColor={colors.textLight}
+            value={currentPinInput} onChangeText={setCurrentPinInput}
+            keyboardType="number-pad" secureTextEntry maxLength={6}
+            autoFocus
+          />
+        )}
+        {pinStep === 'new' && (
+          <TextInput
+            style={styles.secInput} placeholder="Enter 6-digit PIN"
+            placeholderTextColor={colors.textLight}
+            value={newPinInput} onChangeText={setNewPinInput}
+            keyboardType="number-pad" secureTextEntry maxLength={6}
+            autoFocus
+          />
+        )}
+        {pinStep === 'confirm' && (
+          <TextInput
+            style={styles.secInput} placeholder="Re-enter 6-digit PIN"
+            placeholderTextColor={colors.textLight}
+            value={confirmPinInput} onChangeText={setConfirmPinInput}
+            keyboardType="number-pad" secureTextEntry maxLength={6}
+            autoFocus
+          />
+        )}
+        {pinError ? <Text style={styles.errorText}>{pinError}</Text> : null}
+        <TouchableOpacity style={styles.secBtn} onPress={handlePinStepSubmit}>
+          <Text style={styles.secBtnText}>{pinStep === 'confirm' ? 'Save PIN' : 'Continue'}</Text>
+        </TouchableOpacity>
+        {pinStep !== 'verify' && (
+          <TouchableOpacity onPress={() => { setPinStep('verify'); setPinError(''); }} style={{ alignItems: 'center', marginTop: 8 }}>
+            <Text style={{ color: colors.textSecondary, fontSize: 13 }}>Back</Text>
+          </TouchableOpacity>
+        )}
+      </DraggableModal>
+
+      {/* ── Change Password Modal ── */}
+      <DraggableModal visible={showChangePasswordModal} onClose={() => setShowChangePasswordModal(false)}>
+        <Text style={styles.modalTitle}>Change Password</Text>
+        <Text style={styles.modalSub}>Verify your current password before setting a new one.</Text>
+        <Text style={styles.secFieldLabel}>Current Password</Text>
+        <TextInput
+          style={styles.secInput} placeholder="Enter current password" placeholderTextColor={colors.textLight}
+          value={currentPassword} onChangeText={setCurrentPassword} secureTextEntry
+        />
+        <Text style={styles.secFieldLabel}>New Password</Text>
+        <TextInput
+          style={styles.secInput} placeholder="Min. 8 characters" placeholderTextColor={colors.textLight}
+          value={newPassword} onChangeText={setNewPassword} secureTextEntry
+        />
+        <Text style={styles.secFieldLabel}>Confirm New Password</Text>
+        <TextInput
+          style={styles.secInput} placeholder="Re-enter new password" placeholderTextColor={colors.textLight}
+          value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry
+        />
+        {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
+        <TouchableOpacity style={[styles.secBtn, passwordLoading && { opacity: 0.6 }]} onPress={handleChangePassword} disabled={passwordLoading}>
+          <Text style={styles.secBtnText}>{passwordLoading ? 'Updating...' : 'Update Password'}</Text>
+        </TouchableOpacity>
+      </DraggableModal>
+
+      <AppModal
+        visible={showPinSuccessModal}
+        onClose={() => setShowPinSuccessModal(false)}
+        icon="checkmark-circle"
+        title="PIN Updated!"
+        message="Your new PIN has been saved successfully."
+        buttons={[{ label: 'Great', onPress: () => setShowPinSuccessModal(false) }]}
+      />
+
+      <AppModal
+        visible={showPasswordSuccessModal}
+        onClose={() => setShowPasswordSuccessModal(false)}
+        icon="checkmark-circle"
+        title="Password Updated!"
+        message="Your account password has been changed successfully."
+        buttons={[{ label: 'Great', onPress: () => setShowPasswordSuccessModal(false) }]}
+      />
 
       <AppModal
         visible={showEmptyNameModal}
@@ -334,4 +550,45 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       borderWidth: 1, borderColor: colors.error + '30',
     },
     signOutText: { fontSize: 15, color: colors.error, fontWeight: '700' },
+    // Security section
+    securityRow: {
+      backgroundColor: colors.surface, flexDirection: 'row',
+      justifyContent: 'space-between', alignItems: 'center',
+      padding: 16, borderRadius: 12, marginBottom: 8,
+      borderWidth: 1, borderColor: colors.borderLight,
+    },
+    securityLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+    securityIcon: {
+      width: 36, height: 36, borderRadius: 10,
+      justifyContent: 'center', alignItems: 'center',
+    },
+    securityLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+    securitySub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+    // Security modals
+    modalTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, marginBottom: 6 },
+    modalSub: { fontSize: 14, color: colors.textSecondary, marginBottom: 20, lineHeight: 20 },
+    secFieldLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
+    secInput: {
+      borderWidth: 1.5, borderColor: colors.border, borderRadius: 12,
+      paddingHorizontal: 14, paddingVertical: 13,
+      fontSize: 15, color: colors.textPrimary,
+      backgroundColor: colors.background, marginBottom: 16,
+    },
+    secBtn: {
+      backgroundColor: colors.primary, borderRadius: 12,
+      padding: 15, alignItems: 'center', marginTop: 4,
+      shadowColor: colors.primary, shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.25, shadowRadius: 6, elevation: 3,
+    },
+    secBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    errorText: { color: colors.error, fontSize: 13, marginTop: -8, marginBottom: 12, fontWeight: '500' },
+    // PIN dots
+    pinDots: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 8 },
+    pinDot: {
+      width: 16, height: 16, borderRadius: 8,
+      borderWidth: 2, borderColor: colors.primary,
+      backgroundColor: 'transparent',
+    },
+    pinDotFilled: { backgroundColor: colors.primary },
+    pinHint: { textAlign: 'center', fontSize: 12, color: colors.textLight, marginBottom: 20, fontWeight: '500' },
   });

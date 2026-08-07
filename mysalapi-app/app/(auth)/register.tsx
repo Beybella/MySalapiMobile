@@ -241,7 +241,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     },
     passwordInput: { flex: 1, padding: 14, fontSize: 15, color: colors.textPrimary },
     eyeButton: { padding: 14 },
-    errorText: { color: 'red', fontSize: 12, marginBottom: 10, marginTop: -8 },
+    errorText: { color: colors.error, fontSize: 12, marginBottom: 10, marginTop: -8 },
     termsContainer: {
       flexDirection: 'row', alignItems: 'center', marginBottom: 16, marginTop: 4,
     },

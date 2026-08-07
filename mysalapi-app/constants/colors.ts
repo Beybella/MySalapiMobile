@@ -1,85 +1,91 @@
-// Lush Island Oasis Color Strategy
+// Palette family: sage green · dusty rose · steel blue · cream
+// Strategy: deep rich primary for actions/headers, palette swatches for backgrounds/surfaces,
+// each ledger gets its own hue from the palette family for personality.
+
 export const LightColors = {
-  // Backgrounds
-  background: '#F3FDFB',
+  // ── Backgrounds ──────────────────────────────────────────────────────
+  background: '#F5F7F4',      // near-white with a hint of sage — easy on the eyes
   surface: '#FFFFFF',
 
-  // Accents
-  primary: '#32A08E',
-  primaryDark: '#2a8878',
-  secondary: '#50E3C2',
+  // ── Primary (Sage Green — darkened for contrast) ──────────────────────
+  primary: '#5A7A5C',         // deep sage — readable on white, rich not neon
+  primaryDark: '#426044',     // pressed / darker state
+  secondary: '#8BA5A0',       // muted teal-sage — secondary actions
 
-  // Text
-  textPrimary: '#1A2B28',
-  textSecondary: '#4a6b65',
-  textLight: '#8aada8',
+  // ── Text ──────────────────────────────────────────────────────────────
+  textPrimary: '#2C3B2D',     // near-black with green undertone — warm and grounded
+  textSecondary: '#637464',   // mid sage-grey — labels, subtitles
+  textLight: '#9FB5A0',       // light sage — placeholders, hints
 
-  // Borders & misc
-  border: '#d0ece8',
-  borderLight: '#e7f6f3',
-  highlight: '#D9BF77',
+  // ── Borders & UI chrome ───────────────────────────────────────────────
+  border: '#D4DDD4',          // very light sage border
+  borderLight: '#EDF2EB',     // palette mint — section dividers
+  highlight: '#E5CACA',       // dusty rose — warnings, highlights
 
-  // Status
-  error: '#DC3545',
-  warning: '#D9BF77',
-  success: '#32A08E',
-  info: '#50E3C2',
+  // ── Status ────────────────────────────────────────────────────────────
+  error: '#B85C5C',           // muted rose-red — matches dusty rose family
+  warning: '#B8935C',         // warm amber-tan
+  success: '#5A7A5C',         // same as primary — green = good
+  info: '#7A97B0',            // steel blue family
 
-  // Health status
-  healthy: '#32A08E',
-  atRisk: '#D9BF77',
-  critical: '#DC3545',
+  // ── Health status ──────────────────────────────────────────────────────
+  healthy: '#5A7A5C',
+  atRisk: '#B8935C',
+  critical: '#B85C5C',
 
-  // Ledger accent colors (kept distinct per ledger)
-  personalLedger: '#32A08E',
-  pautangLedger: '#5B8DB8',
-  ambaganLedger: '#8B72BE',
-  budgetPlanner: '#C9A84C',
+  // ── Ledger accents — each distinct, all from palette family ──────────
+  // Personal: deep sage (earthy, grounded for daily expenses)
+  personalLedger: '#5A7A5C',
+  // Pautang: steel blue (trustworthy, financial)
+  pautangLedger: '#7A97B0',
+  // Ambagan: dusty rose-mauve (social, group energy)
+  ambaganLedger: '#A67878',
+  // Budget: warm taupe-green (planning, careful)
+  budgetPlanner: '#7A9478',
 
-  // Overlay
-  overlay: 'rgba(26,43,40,0.5)',
+  // ── Overlay ───────────────────────────────────────────────────────────
+  overlay: 'rgba(44,59,45,0.45)',
 };
 
 export const DarkColors = {
-  // Backgrounds
-  background: '#121C1A',
-  surface: '#1E2F2C',
+  // ── Backgrounds ──────────────────────────────────────────────────────
+  background: '#1C2420',      // deep dark sage-green
+  surface: '#253027',         // slightly lighter dark green
 
-  // Accents — soft muted teal
-  primary: '#2E9E8A',
-  primaryDark: '#27806F',
-  secondary: '#27806F',
+  // ── Primary ───────────────────────────────────────────────────────────
+  primary: '#8BB88D',         // lighter sage for dark — enough contrast on dark bg
+  primaryDark: '#6A9A6C',
+  secondary: '#8BA5A0',
 
-  // Text
-  textPrimary: '#F3FDFB',
-  textSecondary: '#9ecec8',
-  textLight: '#5a8a84',
+  // ── Text ──────────────────────────────────────────────────────────────
+  textPrimary: '#EDF2EB',     // light mint — warm white
+  textSecondary: '#9FB5A0',   // muted sage
+  textLight: '#637464',       // dim sage-grey
 
-  // Borders & misc
-  border: '#2a4440',
-  borderLight: '#3a5a54',
-  highlight: '#D9BF77',
+  // ── Borders ───────────────────────────────────────────────────────────
+  border: '#334535',
+  borderLight: '#2C3B2D',
+  highlight: '#5C3E3E',       // deep dusty rose tint
 
-  // Status
-  error: '#ff6b7a',
-  warning: '#D9BF77',
-  success: '#2E9E8A',
-  info: '#2E9E8A',
+  // ── Status ────────────────────────────────────────────────────────────
+  error: '#D48989',
+  warning: '#C9A87A',
+  success: '#8BB88D',
+  info: '#9AB5C8',
 
-  // Health status
-  healthy: '#2E9E8A',
-  atRisk: '#D9BF77',
-  critical: '#ff6b7a',
+  // ── Health status ──────────────────────────────────────────────────────
+  healthy: '#8BB88D',
+  atRisk: '#C9A87A',
+  critical: '#D48989',
 
-  // Ledger accent colors
-  personalLedger: '#2E9E8A',
-  pautangLedger: '#7aafd4',
-  ambaganLedger: '#a98ee0',
-  budgetPlanner: '#D9BF77',
+  // ── Ledger accents ─────────────────────────────────────────────────────
+  personalLedger: '#8BB88D',
+  pautangLedger: '#9AB5C8',
+  ambaganLedger: '#C8A0A0',
+  budgetPlanner: '#9AB89A',
 
-  // Overlay
-  overlay: 'rgba(0,0,0,0.7)',
+  // ── Overlay ───────────────────────────────────────────────────────────
+  overlay: 'rgba(0,0,0,0.6)',
 };
 
-// Default export kept for backward compat — will be overridden by theme context
 export const Colors = LightColors;

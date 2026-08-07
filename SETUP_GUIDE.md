@@ -77,19 +77,16 @@ SUPABASE_SERVICE_KEY=your_service_key_here
 # ===== EMAIL (Mailtrap SMTP) =====
 MAIL_MAILER=smtp
 MAIL_HOST=sandbox.smtp.mailtrap.io
-MAIL_PORT=2525
+MAIL_HOST=smtp-relay.brevo.com
+MAIL_PORT=587
 MAIL_ENCRYPTION=tls
-MAIL_USERNAME=your_mailtrap_username
-MAIL_PASSWORD=your_mailtrap_password
+MAIL_USERNAME=your_email_here
+MAIL_PASSWORD=your_brevo_smtp_key_here
 MAIL_FROM_ADDRESS=noreply@mysalapi.com
 MAIL_FROM_NAME=MySalapi
 
-# ===== EMAIL (Mailtrap API - Optional Fallback) =====
-MAILTRAP_API_TOKEN=your_api_token_here
-MAILTRAP_INBOX_ID=your_inbox_id_here
-
-# ===== RESEND EMAIL API (Optional Fallback) =====
-RESEND_API_KEY=your_resend_api_key_here
+# ===== BREVO API =====
+BREVO_API_KEY=your_brevo_api_key_here
 
 # ===== DATABASE =====
 DB_CONNECTION=sqlite

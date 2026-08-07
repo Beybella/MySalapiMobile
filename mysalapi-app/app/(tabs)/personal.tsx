@@ -10,6 +10,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { format } from 'date-fns';
 import DateInput from '../../components/DateInput';
 import AppModal from '../../components/AppModal';
+import DraggableModal from '../../components/DraggableModal';
 
 
 const CATEGORIES = ['Food', 'Transport', 'Utilities', 'Health', 'Entertainment', 'Shopping', 'Education', 'Others'];
@@ -411,129 +412,142 @@ export default function PersonalScreen() {
       </TouchableOpacity>
 
       {/* ── Add / Edit Expense Modal ── */}
-      <Modal visible={showExpenseModal} animationType="slide" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={styles.modal}>
+      <DraggableModal visible={showExpenseModal} onClose={() => setShowExpenseModal(false)}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
                 {editingExpense ? 'Edit Expense' : 'Add Expense'}
               </Text>
               <TouchableOpacity onPress={() => setShowExpenseModal(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
+                <Ionicons name="close" size={16} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <TextInput
-                style={styles.input} placeholder="Title"
-                placeholderTextColor={colors.textLight}
-                value={expTitle} onChangeText={setExpTitle}
-              />
-              <TextInput
-                style={styles.input} placeholder="Amount (₱)"
-                placeholderTextColor={colors.textLight}
-                value={expAmount} onChangeText={setExpAmount} keyboardType="decimal-pad"
-              />
-              <Text style={styles.inputLabel}>Category</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                {CATEGORIES.map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.catChip, expCategory === cat && styles.catChipActive]}
-                    onPress={() => setExpCategory(cat)}
-                  >
-                    <Text style={[styles.catChipText, expCategory === cat && styles.catChipTextActive]}>{cat}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <DateInput label="Date" value={expDate} onChange={setExpDate} />
-              <TextInput
-                style={styles.input} placeholder="Description (optional)"
-                placeholderTextColor={colors.textLight}
-                value={expDesc} onChangeText={setExpDesc}
-              />
-
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Title</Text>
+                <TextInput
+                  style={styles.input} placeholder="e.g. Lunch at SM"
+                  placeholderTextColor={colors.textLight}
+                  value={expTitle} onChangeText={setExpTitle}
+                />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Amount (₱)</Text>
+                <TextInput
+                  style={styles.input} placeholder="0.00"
+                  placeholderTextColor={colors.textLight}
+                  value={expAmount} onChangeText={setExpAmount} keyboardType="decimal-pad"
+                />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Category</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {CATEGORIES.map((cat) => (
+                      <TouchableOpacity
+                        key={cat}
+                        style={[styles.catChip, expCategory === cat && styles.catChipActive]}
+                        onPress={() => setExpCategory(cat)}
+                      >
+                        <Text style={[styles.catChipText, expCategory === cat && styles.catChipTextActive]}>{cat}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+              <View style={styles.fieldGroup}>
+                <DateInput label="Date" value={expDate} onChange={setExpDate} />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Description (optional)</Text>
+                <TextInput
+                  style={styles.input} placeholder="Add a note..."
+                  placeholderTextColor={colors.textLight}
+                  value={expDesc} onChangeText={setExpDesc}
+                  multiline numberOfLines={2}
+                />
+              </View>
               <TouchableOpacity style={styles.saveBtn} onPress={saveExpense}>
                 <Text style={styles.saveBtnText}>
                   {editingExpense ? 'Save Changes' : 'Save Expense'}
                 </Text>
               </TouchableOpacity>
-
-              {/* Delete button — only in edit mode */}
               {editingExpense && (
-                <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => deleteExpense(editingExpense)}
-                >
+                <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteExpense(editingExpense)}>
                   <Ionicons name="trash-outline" size={16} color={colors.error} />
                   <Text style={styles.deleteBtnText}>Delete Expense</Text>
                 </TouchableOpacity>
               )}
             </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </DraggableModal>
 
       {/* ── Add / Edit Bill Modal ── */}
-      <Modal visible={showBillModal} animationType="slide" transparent>
-        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-          <View style={styles.modal}>
+      <DraggableModal visible={showBillModal} onClose={() => setShowBillModal(false)}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>
-                {editingBill ? 'Edit Bill Reminder' : 'Add Bill Reminder'}
+                {editingBill ? 'Edit Bill' : 'Add Bill Reminder'}
               </Text>
               <TouchableOpacity onPress={() => setShowBillModal(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={20} color={colors.textSecondary} />
+                <Ionicons name="close" size={16} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <TextInput
-                style={styles.input} placeholder="Bill name"
-                placeholderTextColor={colors.textLight}
-                value={billTitle} onChangeText={setBillTitle}
-              />
-              <TextInput
-                style={styles.input} placeholder="Amount (₱)"
-                placeholderTextColor={colors.textLight}
-                value={billAmount} onChangeText={setBillAmount} keyboardType="decimal-pad"
-              />
-              <Text style={styles.inputLabel}>Category</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-                {BILL_CATEGORIES.map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.catChip, billCategory === cat && styles.catChipActive]}
-                    onPress={() => setBillCategory(cat)}
-                  >
-                    <Text style={[styles.catChipText, billCategory === cat && styles.catChipTextActive]}>{cat}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <DateInput label="Due Date" value={billDueDate} onChange={setBillDueDate} />
-              <Text style={styles.inputLabel}>Reminder</Text>
-              <TextInput
-                style={styles.input} placeholder="Remind me X days before (e.g., 3)"
-                placeholderTextColor={colors.textLight}
-                value={billReminderDays} onChangeText={setBillReminderDays} keyboardType="number-pad"
-              />
-              <Text style={styles.helpText}>You'll be notified this many days before the bill is due</Text>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Bill Name</Text>
+                <TextInput
+                  style={styles.input} placeholder="e.g. Meralco Bill"
+                  placeholderTextColor={colors.textLight}
+                  value={billTitle} onChangeText={setBillTitle}
+                />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Amount (₱)</Text>
+                <TextInput
+                  style={styles.input} placeholder="0.00"
+                  placeholderTextColor={colors.textLight}
+                  value={billAmount} onChangeText={setBillAmount} keyboardType="decimal-pad"
+                />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Category</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {BILL_CATEGORIES.map((cat) => (
+                      <TouchableOpacity
+                        key={cat}
+                        style={[styles.catChip, billCategory === cat && styles.catChipActive]}
+                        onPress={() => setBillCategory(cat)}
+                      >
+                        <Text style={[styles.catChipText, billCategory === cat && styles.catChipTextActive]}>{cat}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+              <View style={styles.fieldGroup}>
+                <DateInput label="Due Date" value={billDueDate} onChange={setBillDueDate} />
+              </View>
+              <View style={styles.fieldGroup}>
+                <Text style={styles.inputLabel}>Remind Me (days before)</Text>
+                <TextInput
+                  style={styles.input} placeholder="e.g. 3"
+                  placeholderTextColor={colors.textLight}
+                  value={billReminderDays} onChangeText={setBillReminderDays} keyboardType="number-pad"
+                />
+                <Text style={styles.helpText}>You'll get an email this many days before the due date.</Text>
+              </View>
               <TouchableOpacity style={styles.saveBtn} onPress={saveBill}>
                 <Text style={styles.saveBtnText}>
                   {editingBill ? 'Save Changes' : 'Save Bill'}
                 </Text>
               </TouchableOpacity>
               {editingBill && (
-                <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => deleteBill(editingBill)}
-                >
+                <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteBill(editingBill)}>
                   <Ionicons name="trash-outline" size={16} color={colors.error} />
                   <Text style={styles.deleteBtnText}>Delete Bill</Text>
                 </TouchableOpacity>
               )}
             </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      </DraggableModal>
 
       {/* ── Mark Paid Confirmation Modal ── */}
       <Modal visible={showPayModal} animationType="slide" transparent>
@@ -787,51 +801,94 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     },
     // Modals
     modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-    modal: { backgroundColor: colors.surface, borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, maxHeight: '85%' },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
-    modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
-    closeBtn: { padding: 4, borderRadius: 20, backgroundColor: colors.border },
+    modalBackdrop: { flex: 1 },
+    modal: {
+      backgroundColor: colors.surface,
+      borderTopLeftRadius: 28,
+      borderTopRightRadius: 28,
+      paddingHorizontal: 24,
+      paddingTop: 12,
+      paddingBottom: 32,
+      maxHeight: '90%',
+    },
+    modalDragHandle: {
+      width: 40, height: 4, borderRadius: 2,
+      backgroundColor: colors.border,
+      alignSelf: 'center', marginBottom: 20,
+    },
+    modalHeader: {
+      flexDirection: 'row', justifyContent: 'space-between',
+      alignItems: 'center', marginBottom: 24,
+    },
+    modalTitle: { fontSize: 20, fontWeight: '800', color: colors.textPrimary, letterSpacing: 0.2 },
+    closeBtn: {
+      width: 32, height: 32, borderRadius: 16,
+      backgroundColor: colors.borderLight,
+      justifyContent: 'center', alignItems: 'center',
+    },
+    // Field groups
+    fieldGroup: { marginBottom: 20 },
+    inputLabel: {
+      fontSize: 12, fontWeight: '700', color: colors.textSecondary,
+      textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8,
+    },
     input: {
-      borderWidth: 1, borderColor: colors.border, borderRadius: 10,
-      padding: 11, fontSize: 14, marginBottom: 10, color: colors.textPrimary,
+      borderWidth: 1.5, borderColor: colors.border, borderRadius: 14,
+      paddingHorizontal: 16, paddingVertical: 14,
+      fontSize: 15, color: colors.textPrimary,
       backgroundColor: colors.background,
     },
-    inputLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
-    helpText: { fontSize: 12, color: colors.textLight, marginTop: -6, marginBottom: 10, lineHeight: 16 },
-    catChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: colors.border, marginRight: 8 },
-    catChipActive: { backgroundColor: colors.personalLedger, borderColor: colors.personalLedger },
-    catChipText: { fontSize: 13, color: colors.textSecondary },
-    catChipTextActive: { color: '#fff', fontWeight: '600' },
-    saveBtn: {
-      padding: 14, borderRadius: 10, backgroundColor: colors.personalLedger,
-      alignItems: 'center', marginTop: 6, marginBottom: 8,
-      flexDirection: 'row', justifyContent: 'center',
+    inputFocused: { borderColor: colors.primary },
+    helpText: {
+      fontSize: 12, color: colors.textLight,
+      marginTop: 6, lineHeight: 17,
     },
-    saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    // Category chips
+    catChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    catChip: {
+      paddingHorizontal: 14, paddingVertical: 8,
+      borderRadius: 20, borderWidth: 1.5,
+      borderColor: colors.border,
+      backgroundColor: colors.background,
+    },
+    catChipActive: { backgroundColor: colors.personalLedger, borderColor: colors.personalLedger },
+    catChipText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
+    catChipTextActive: { color: '#fff', fontWeight: '700' },
+    // Action buttons
+    saveBtn: {
+      padding: 16, borderRadius: 14, backgroundColor: colors.personalLedger,
+      alignItems: 'center', marginTop: 8, marginBottom: 10,
+      flexDirection: 'row', justifyContent: 'center',
+      shadowColor: colors.personalLedger,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+    },
+    saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: 0.3 },
     deleteBtn: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-      gap: 8, padding: 13, borderRadius: 10, marginBottom: 8,
-      borderWidth: 1, borderColor: colors.error + '50',
-      backgroundColor: colors.error + '10',
+      gap: 8, padding: 14, borderRadius: 14, marginBottom: 8,
+      borderWidth: 1.5, borderColor: colors.error + '40',
+      backgroundColor: colors.error + '08',
     },
-    deleteBtnText: { color: colors.error, fontWeight: '600', fontSize: 14 },
+    deleteBtnText: { color: colors.error, fontWeight: '700', fontSize: 14 },
     // Pay modal
     payBillCard: {
-      backgroundColor: colors.background, borderRadius: 12, padding: 14,
+      backgroundColor: colors.personalLedger + '12',
+      borderRadius: 16, padding: 18,
       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-      marginBottom: 14, borderWidth: 1, borderColor: colors.border,
+      marginBottom: 20, borderWidth: 1.5, borderColor: colors.personalLedger + '30',
     },
     payBillTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
-    payBillAmount: { fontSize: 16, fontWeight: '800', color: colors.personalLedger },
-    payNote: { fontSize: 12, color: colors.textLight, marginBottom: 10, lineHeight: 18 },
+    payBillAmount: { fontSize: 20, fontWeight: '800', color: colors.personalLedger },
+    payNote: { fontSize: 13, color: colors.textSecondary, marginBottom: 12, lineHeight: 20 },
     fundOption: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-      padding: 13, borderRadius: 10, marginBottom: 8,
+      padding: 14, borderRadius: 14, marginBottom: 10,
       borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.background,
     },
     fundOptionActive: { backgroundColor: colors.personalLedger, borderColor: colors.personalLedger },
     fundOptionLeft: { flexDirection: 'row', alignItems: 'center' },
-    fundOptionName: { fontSize: 14, fontWeight: '600', color: colors.textPrimary, marginLeft: 10 },
+    fundOptionName: { fontSize: 14, fontWeight: '600', color: colors.textPrimary, marginLeft: 12 },
     fundOptionNameActive: { color: '#fff' },
-    fundOptionSub: { fontSize: 12, color: colors.textSecondary, marginLeft: 10, marginTop: 1 },
+    fundOptionSub: { fontSize: 12, color: colors.textSecondary, marginLeft: 12, marginTop: 2 },
   });
