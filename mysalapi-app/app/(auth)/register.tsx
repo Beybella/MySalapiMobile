@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 import AppModal from '../../components/AppModal';
+import { sendConfirmationEmail } from '../../lib/api';
 
 export default function RegisterScreen() {
   const [fullName, setFullName] = useState('');
@@ -58,26 +59,20 @@ export default function RegisterScreen() {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { full_name: fullName, phone },
-        emailRedirectTo: 'https://krizxei.github.io/MySalapiMobile/email-confirmed.html',
-      },
+      options: { data: { full_name: fullName, phone } },
     });
     setLoading(false);
-    
-    console.log('Registration result:', { data, error });
-    
-    if (error) {
-      console.error('Registration error:', error);
+
+    if (error && !error.message.toLowerCase().includes('email') && !error.message.toLowerCase().includes('sending')) {
       Alert.alert('Registration Failed', error.message);
-    } else if (data.session) {
-      console.log('User registered and logged in:', data.user?.email);
-      router.replace('/(tabs)');
-    } else {
-      console.log('User registered, verification email sent:', email);
-      setRegisteredEmail(email);
-      setShowEmailModal(true);
+      return;
     }
+
+    // Whether Supabase succeeded or had an email error — always send confirmation via Laravel+Brevo
+    const confirmResult = await sendConfirmationEmail({ email });
+    console.log('[Register] confirmation email result:', confirmResult);
+    setRegisteredEmail(email);
+    setShowEmailModal(true);
   };
 
   const showTerms = () => {

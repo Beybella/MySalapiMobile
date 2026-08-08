@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView, Alert, Image,
@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 import AppModal from '../../components/AppModal';
-
+import { sendPasswordReset } from '../../lib/api';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -18,15 +18,13 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showUnverifiedModal, setShowUnverifiedModal] = useState(false);
   const [showResentModal, setShowResentModal] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
   const [showForgotSentModal, setShowForgotSentModal] = useState(false);
   const router = useRouter();
   const { colors } = useTheme();
 
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields.');
-      return;
-    }
+    if (!email || !password) { Alert.alert('Error', 'Please fill in all fields.'); return; }
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
@@ -44,11 +42,8 @@ export default function LoginScreen() {
   const handleResendEmail = async () => {
     const { error: resendError } = await supabase.auth.resend({ type: 'signup', email });
     setShowUnverifiedModal(false);
-    if (resendError) {
-      Alert.alert('Error', resendError.message);
-    } else {
-      setShowResentModal(true);
-    }
+    if (resendError) { Alert.alert('Error', resendError.message); }
+    else { setShowResentModal(true); }
   };
 
   const handleForgotPassword = async () => {
@@ -56,13 +51,20 @@ export default function LoginScreen() {
       Alert.alert('Enter Email', 'Please enter your email address first, then tap Forgot Password.');
       return;
     }
-   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://krizxei.github.io/MySalapiMobile/reset-password.html',
-    });   if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      setShowForgotSentModal(true);
+    setForgotLoading(true);
+    const result = await sendPasswordReset({ email });
+    setForgotLoading(false);
+    if (!result.success) {
+      if (result.error?.includes('No account found') || result.error?.includes('not found')) {
+        Alert.alert('Not Found', 'No MySalapi account exists with that email address.');
+      } else if (result.error?.includes('timed out') || result.error?.includes('server')) {
+        Alert.alert('Server Offline', 'Could not reach the server. Make sure the Laravel server is running on your PC.');
+      } else {
+        Alert.alert('Error', result.error ?? 'Could not send reset email.');
+      }
+      return;
     }
+    setShowForgotSentModal(true);
   };
 
   const styles = makeStyles(colors);
@@ -128,8 +130,8 @@ export default function LoginScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotContainer}>
-              <Text style={styles.forgotText}>Forgot Password?</Text>
+            <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotContainer} disabled={forgotLoading}>
+              <Text style={styles.forgotText}>{forgotLoading ? 'Sending...' : 'Forgot Password?'}</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -152,36 +154,22 @@ export default function LoginScreen() {
         </ScrollView>
       </TouchableWithoutFeedback>
 
-      <AppModal
-        visible={showUnverifiedModal}
-        onClose={() => setShowUnverifiedModal(false)}
-        icon="mail-unread-outline"
-        iconColor={colors.warning}
-        title="Email Not Verified"
+      <AppModal visible={showUnverifiedModal} onClose={() => setShowUnverifiedModal(false)}
+        icon="mail-unread-outline" iconColor={colors.warning} title="Email Not Verified"
         message="Your email address hasn't been verified yet. Want us to resend the verification email?"
         buttons={[
           { label: 'Cancel', variant: 'secondary', onPress: () => setShowUnverifiedModal(false) },
           { label: 'Resend Email', onPress: handleResendEmail },
         ]}
       />
-
-      <AppModal
-        visible={showResentModal}
-        onClose={() => setShowResentModal(false)}
-        icon="checkmark-circle"
-        title="Verification Sent!"
-        message="A new verification link was sent to your inbox."
-        highlight={email}
+      <AppModal visible={showResentModal} onClose={() => setShowResentModal(false)}
+        icon="checkmark-circle" title="Verification Sent!"
+        message="A new verification link was sent to your inbox." highlight={email}
         buttons={[{ label: 'Got It', onPress: () => setShowResentModal(false) }]}
       />
-
-      <AppModal
-        visible={showForgotSentModal}
-        onClose={() => setShowForgotSentModal(false)}
-        icon="lock-open-outline"
-        title="Reset Link Sent!"
-        message="Check your inbox for a password reset link."
-        highlight={email}
+      <AppModal visible={showForgotSentModal} onClose={() => setShowForgotSentModal(false)}
+        icon="lock-open-outline" title="Reset Link Sent!"
+        message="Check your inbox for a password reset link." highlight={email}
         buttons={[{ label: 'Got It', onPress: () => setShowForgotSentModal(false) }]}
       />
     </KeyboardAvoidingView>
@@ -211,17 +199,13 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border,
       borderRadius: 12, marginBottom: 8,
     },
-    passwordInput: {
-      flex: 1, padding: 14, fontSize: 15, color: colors.textPrimary,
-    },
+    passwordInput: { flex: 1, padding: 14, fontSize: 15, color: colors.textPrimary },
     eyeButton: { padding: 14 },
     forgotContainer: { alignItems: 'flex-end', marginBottom: 10 },
     forgotText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
     button: {
-      backgroundColor: colors.primary, borderRadius: 12,
-      padding: 16, alignItems: 'center', marginTop: 10,
-      shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.35, shadowRadius: 8, elevation: 4,
+      backgroundColor: colors.primary, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10,
+      shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 8, elevation: 4,
     },
     buttonDisabled: { opacity: 0.6 },
     buttonText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },

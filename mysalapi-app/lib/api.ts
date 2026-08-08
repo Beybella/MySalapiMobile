@@ -20,7 +20,7 @@ async function post(endpoint: string, body: object): Promise<{ success: boolean;
 
     clearTimeout(timeout);
     const data = await res.json();
-    if (!res.ok) return { success: false, error: data.message ?? `Server error ${res.status}` };
+    if (!res.ok) return { success: false, error: data.error ?? data.message ?? `Server error ${res.status}` };
     return { success: true, ...data };
   } catch (err: any) {
     if (err.name === 'AbortError') {
@@ -73,4 +73,12 @@ export function sendShortfallAlert(params: {
   notification_id?: string;
 }) {
   return post('/email/shortfall', params);
+}
+
+export function sendPasswordReset(params: { email: string }) {
+  return post('/auth/send-password-reset', params);
+}
+
+export function sendConfirmationEmail(params: { email: string }) {
+  return post('/auth/send-confirmation', params);
 }
