@@ -36,6 +36,7 @@ export default function HomeScreen() {
   const [userName, setUserName] = useState('');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [duesOnDate, setDuesOnDate] = useState<{ bills: any[], loans: any[] }>({ bills: [], loans: [] });
+  const [modalTab, setModalTab] = useState<'unsettled' | 'paid'>('unsettled');
 
   const loadDashboard = async () => {
     if (!user) return;
@@ -345,63 +346,99 @@ export default function HomeScreen() {
                 </Text>
                 <Text style={styles.modalSubtitle}>Dues on this date</Text>
               </View>
-              <TouchableOpacity onPress={() => setSelectedDate(null)} style={styles.modalClose}>
+              <TouchableOpacity onPress={() => {
+                setSelectedDate(null);
+                setModalTab('unsettled');
+              }} style={styles.modalClose}>
                 <Ionicons name="close" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalScroll} showsVerticalScrollIndicator={false}>
-              {duesOnDate.bills.length > 0 && (
+            {/* Tabs */}
+            <View style={styles.modalTabs}>
+              <TouchableOpacity
+                style={[styles.modalTab, modalTab === 'unsettled' && styles.modalTabActive]}
+                onPress={() => setModalTab('unsettled')}
+              >
+                <Text style={[styles.modalTabText, modalTab === 'unsettled' && styles.modalTabTextActive]}>
+                  Unsettled
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalTab, modalTab === 'paid' && styles.modalTabActive]}
+                onPress={() => setModalTab('paid')}
+              >
+                <Text style={[styles.modalTabText, modalTab === 'paid' && styles.modalTabTextActive]}>
+                  Paid
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalScrollContainer}>
+              <ScrollView showsVerticalScrollIndicator={false}>
+              {duesOnDate.bills.filter((bill: any) => modalTab === 'paid' ? bill.is_paid : !bill.is_paid).length > 0 && (
                 <View style={styles.duesSection}>
                   <View style={styles.duesSectionHeader}>
                     <View style={[styles.dueDot, { backgroundColor: '#2196F3' }]} />
-                    <Text style={styles.duesSectionTitle}>Bills ({duesOnDate.bills.length})</Text>
+                    <Text style={styles.duesSectionTitle}>
+                      Bills ({duesOnDate.bills.filter((bill: any) => modalTab === 'paid' ? bill.is_paid : !bill.is_paid).length})
+                    </Text>
                   </View>
-                  {duesOnDate.bills.map((bill: any, idx: number) => {
-                    const isPaid = bill.is_paid;
-                    return (
-                      <View key={idx} style={[styles.dueItem, isPaid && styles.dueItemPaid]}>
-                        <Text style={[styles.dueItemTitle, isPaid && styles.dueItemTitlePaid]}>
-                          {bill.title}
-                        </Text>
-                        <Text style={[styles.dueItemAmount, isPaid && styles.dueItemAmountPaid]}>
-                          {formatCurrency(Number(bill.amount))}
-                        </Text>
-                      </View>
-                    );
-                  })}
+                  {duesOnDate.bills
+                    .filter((bill: any) => modalTab === 'paid' ? bill.is_paid : !bill.is_paid)
+                    .map((bill: any, idx: number) => {
+                      const isPaid = bill.is_paid;
+                      return (
+                        <View key={idx} style={[styles.dueItem, isPaid && styles.dueItemPaid]}>
+                          <Text style={[styles.dueItemTitle, isPaid && styles.dueItemTitlePaid]}>
+                            {bill.title}
+                          </Text>
+                          <Text style={[styles.dueItemAmount, isPaid && styles.dueItemAmountPaid]}>
+                            {formatCurrency(Number(bill.amount))}
+                          </Text>
+                        </View>
+                      );
+                    })}
                 </View>
               )}
 
-              {duesOnDate.loans.length > 0 && (
+              {duesOnDate.loans.filter((loan: any) => modalTab === 'paid' ? loan.status === 'paid' : loan.status !== 'paid').length > 0 && (
                 <View style={styles.duesSection}>
                   <View style={styles.duesSectionHeader}>
                     <View style={[styles.dueDot, { backgroundColor: '#FF5252' }]} />
-                    <Text style={styles.duesSectionTitle}>Loans ({duesOnDate.loans.length})</Text>
+                    <Text style={styles.duesSectionTitle}>
+                      Loans ({duesOnDate.loans.filter((loan: any) => modalTab === 'paid' ? loan.status === 'paid' : loan.status !== 'paid').length})
+                    </Text>
                   </View>
-                  {duesOnDate.loans.map((loan: any, idx: number) => {
-                    const isPaid = loan.status === 'paid';
-                    return (
-                      <View key={idx} style={[styles.dueItem, isPaid && styles.dueItemPaid]}>
-                        <Text style={[styles.dueItemTitle, isPaid && styles.dueItemTitlePaid]}>
-                          {loan.borrower?.full_name || loan.lender?.full_name || 'Loan'}
-                        </Text>
-                        <Text style={[styles.dueItemAmount, isPaid && styles.dueItemAmountPaid]}>
-                          {formatCurrency(Number(loan.amount_remaining))}
-                        </Text>
-                      </View>
-                    );
-                  })}
+                  {duesOnDate.loans
+                    .filter((loan: any) => modalTab === 'paid' ? loan.status === 'paid' : loan.status !== 'paid')
+                    .map((loan: any, idx: number) => {
+                      const isPaid = loan.status === 'paid';
+                      return (
+                        <View key={idx} style={[styles.dueItem, isPaid && styles.dueItemPaid]}>
+                          <Text style={[styles.dueItemTitle, isPaid && styles.dueItemTitlePaid]}>
+                            {loan.borrower?.full_name || loan.lender?.full_name || 'Loan'}
+                          </Text>
+                          <Text style={[styles.dueItemAmount, isPaid && styles.dueItemAmountPaid]}>
+                            {formatCurrency(Number(loan.amount_remaining))}
+                          </Text>
+                        </View>
+                      );
+                    })}
                 </View>
               )}
 
-              {duesOnDate.bills.length === 0 && duesOnDate.loans.length === 0 && (
+              {duesOnDate.bills.filter((bill: any) => modalTab === 'paid' ? bill.is_paid : !bill.is_paid).length === 0 && 
+               duesOnDate.loans.filter((loan: any) => modalTab === 'paid' ? loan.status === 'paid' : loan.status !== 'paid').length === 0 && (
                 <View style={styles.emptyDues}>
                   <Ionicons name="calendar-outline" size={48} color={colors.textLight} />
-                  <Text style={styles.emptyDuesText}>No dues on this date</Text>
+                  <Text style={styles.emptyDuesText}>
+                    No {modalTab === 'paid' ? 'paid' : 'unsettled'} dues on this date
+                  </Text>
                 </View>
               )}
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -554,8 +591,8 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       justifyContent: 'space-between',
       alignItems: 'flex-start',
       padding: 20,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.border,
+      paddingBottom: 16,
+      borderBottomWidth: 0,
     },
     modalTitle: {
       fontSize: 20,
@@ -570,8 +607,39 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     modalClose: {
       padding: 4,
     },
-    modalScroll: {
+    modalTabs: {
+      flexDirection: 'row',
+      gap: 8,
+      paddingHorizontal: 20,
+      paddingTop: 0,
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    modalTab: {
+      flex: 1,
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 10,
+      backgroundColor: colors.background,
+      alignItems: 'center',
+    },
+    modalTabActive: {
+      backgroundColor: colors.primary,
+    },
+    modalTabText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+    modalTabTextActive: {
+      color: '#ffffff',
+    },
+    modalScrollContainer: {
       padding: 20,
+      height: 300,
+    },
+    modalScroll: {
     },
 
     // Dues sections
@@ -604,7 +672,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       marginBottom: 8,
     },
     dueItemPaid: {
-      backgroundColor: colors.textLight + '20',
+      backgroundColor: colors.success + '15',  // Light green background
     },
     dueItemTitle: {
       fontSize: 14,
@@ -615,7 +683,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     },
     dueItemTitlePaid: {
       textDecorationLine: 'line-through',
-      color: colors.textSecondary,
+      color: colors.success,  // Green text
     },
     dueItemAmount: {
       fontSize: 14,
@@ -624,7 +692,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     },
     dueItemAmountPaid: {
       textDecorationLine: 'line-through',
-      color: colors.textSecondary,
+      color: colors.success,  // Green text
     },
     emptyDues: {
       alignItems: 'center',

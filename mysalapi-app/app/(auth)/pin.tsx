@@ -20,6 +20,7 @@ export default function PinScreen() {
   const [mode, setMode] = useState<'enter' | 'setup' | 'confirm' | 'forgot'>('enter');
   const [tempPin, setTempPin] = useState('');
   const [hasBiometrics, setHasBiometrics] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const router = useRouter();
   const { colors } = useTheme();
   const { setPinVerified, user, signOut } = useAuth();
@@ -41,9 +42,12 @@ export default function PinScreen() {
   const [forgotErrorMsg, setForgotErrorMsg] = useState('');
 
   useEffect(() => {
-    checkSetup();
-    checkLockout();
-  }, []);
+    if (user?.id) {
+      checkSetup();
+      checkLockout();
+      setIsInitializing(false);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     if (lockedUntil) {
@@ -75,6 +79,8 @@ export default function PinScreen() {
   };
 
   const checkSetup = async () => {
+    if (!user?.id) return; // Don't check if user ID not available yet
+    
     const savedPin = await SecureStore.getItemAsync(PIN_KEY);
     const biometricAvailable = await LocalAuthentication.hasHardwareAsync();
     setHasBiometrics(biometricAvailable);
@@ -211,6 +217,15 @@ export default function PinScreen() {
     if (mode === 'forgot') return 'Enter your account password to reset your PIN';
     return 'Welcome back!';
   };
+
+  // ── Loading/initializing view ──
+  if (isInitializing || !user?.id) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.subtitle}>Loading...</Text>
+      </View>
+    );
+  }
 
   // ── Locked out view ──
   if (lockedUntil) {

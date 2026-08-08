@@ -23,7 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   setPinVerified: () => {},
 });
 
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+const INACTIVITY_TIMEOUT_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -59,10 +59,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         resolved = true;
         clearTimeout(timeout);
         // If refresh token is invalid/expired, clear stale session
-        if (error?.message?.toLowerCase().includes('refresh token')) {
+        if (error?.message?.toLowerCase().includes('refresh token') || 
+            error?.message?.toLowerCase().includes('refresh_token')) {
+          console.log('Clearing invalid session due to refresh token error');
           supabase.auth.signOut();
           setSession(null);
           sessionRef.current = null;
+          setPinVerified(false);
+        } else if (error) {
+          console.log('Auth session error:', error.message);
+          supabase.auth.signOut();
+          setSession(null);
+          sessionRef.current = null;
+          setPinVerified(false);
         } else {
           setSession(s);
           sessionRef.current = s;
@@ -70,8 +79,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         setLoading(false);
       }
-    }).catch(() => {
-      if (!resolved) { resolved = true; clearTimeout(timeout); setLoading(false); }
+    }).catch((err) => {
+      console.log('Auth getSession catch:', err?.message);
+      if (!resolved) { 
+        resolved = true; 
+        clearTimeout(timeout);
+        supabase.auth.signOut();
+        setSession(null);
+        sessionRef.current = null;
+        setPinVerified(false);
+        setLoading(false); 
+      }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {

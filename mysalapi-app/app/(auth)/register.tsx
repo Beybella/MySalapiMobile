@@ -62,12 +62,19 @@ export default function RegisterScreen() {
         data: { full_name: fullName, phone },
         emailRedirectTo: 'https://krizxei.github.io/MySalapiMobile/email-confirmed.html',
       },
-    });   setLoading(false);
+    });
+    setLoading(false);
+    
+    console.log('Registration result:', { data, error });
+    
     if (error) {
+      console.error('Registration error:', error);
       Alert.alert('Registration Failed', error.message);
     } else if (data.session) {
+      console.log('User registered and logged in:', data.user?.email);
       router.replace('/(tabs)');
     } else {
+      console.log('User registered, verification email sent:', email);
       setRegisteredEmail(email);
       setShowEmailModal(true);
     }
