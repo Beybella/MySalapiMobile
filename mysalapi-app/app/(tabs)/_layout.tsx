@@ -1,9 +1,12 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
+import { TouchableOpacity, View } from 'react-native';
+import { useRouter } from 'expo-router';
 
 export default function TabsLayout() {
   const { colors } = useTheme();
+  const router = useRouter();
 
   return (
     <Tabs
@@ -14,8 +17,9 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
-          height: 60,
-          paddingBottom: 8,
+          height: 70,
+          paddingBottom: 12,
+          position: 'relative',
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: '600' },
       }}
@@ -28,24 +32,33 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="personal"
+        name="records"
         options={{
-          title: 'Personal',
-          tabBarIcon: ({ color, size }) => <Ionicons name="wallet" size={size} color={color} />,
+          title: 'Records',
+          tabBarIcon: ({ color, size }) => <Ionicons name="document-text" size={size} color={color} />,
         }}
       />
+      {/* Hidden tab for quick add */}
       <Tabs.Screen
-        name="pautang"
+        name="quick-add"
         options={{
-          title: 'Pautang',
-          tabBarIcon: ({ color, size }) => <Ionicons name="people" size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="ambagan"
-        options={{
-          title: 'Ambagan',
-          tabBarIcon: ({ color, size }) => <Ionicons name="grid" size={size} color={color} />,
+          title: '',
+          tabBarButton: () => (
+            <TouchableOpacity 
+              style={{
+                top: -30,
+                justifyContent: 'center',
+                alignItems: 'center',
+                width: 60,
+                height: 60,
+                borderRadius: 30,
+                backgroundColor: colors.primary,
+              }}
+              onPress={() => router.push('/(tabs)/record-payment')}
+            >
+              <Ionicons name="add" size={36} color="#ffffff" />
+            </TouchableOpacity>
+          ),
         }}
       />
       <Tabs.Screen
