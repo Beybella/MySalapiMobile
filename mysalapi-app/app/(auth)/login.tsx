@@ -68,8 +68,15 @@ export default function LoginScreen() {
   const styles = makeStyles(colors);
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
           <Image
             source={require('../../assets/MySalapiLogo.png')}
@@ -185,7 +192,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     form: {
       flex: 1, backgroundColor: colors.background,
       borderTopLeftRadius: 36, borderTopRightRadius: 36,
-      padding: 28, paddingTop: 32,
+      padding: 28, paddingTop: 32, paddingBottom: 48,
     },
     title: { fontSize: 26, fontWeight: '800', color: colors.textPrimary, marginBottom: 22 },
     label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
