@@ -18,6 +18,7 @@ interface Record {
   date: string;
   description?: string;
   category: RecordCategory;
+  status?: string;
 }
 
 export default function RecordsScreen() {
@@ -27,58 +28,91 @@ export default function RecordsScreen() {
   const [selectedCategory, setSelectedCategory] = useState<RecordCategory>('personal');
   const [records, setRecords] = useState<Record[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const loadRecords = async () => {
     if (!user) return;
 
     try {
-      let query;
+      setLoading(true);
+      let data;
 
       if (selectedCategory === 'personal') {
         // Personal expenses
-        const { data } = await supabase
+        const response = await supabase
           .from('personal_expenses')
-          .select('id, amount, expense_date as date, description')
+          .select('id, amount, expense_date, description')
           .eq('user_id', user.id)
           .order('expense_date', { ascending: false });
 
-        setRecords(
-          (data || []).map(r => ({
-            ...r,
-            category: 'personal' as RecordCategory,
-          }))
-        );
+        if (response.error) {
+          console.error('Personal expenses query error:', response.error);
+          setRecords([]);
+        } else {
+          data = response.data || [];
+          setRecords(
+            data.map(r => ({
+              id: r.id,
+              amount: r.amount,
+              date: r.expense_date,
+              description: r.description,
+              category: 'personal' as RecordCategory,
+            }))
+          );
+        }
       } else if (selectedCategory === 'pautang') {
         // Loans where user is borrower or lender
-        const { data } = await supabase
+        const response = await supabase
           .from('loans')
-          .select('id, amount_remaining as amount, created_at as date, description, lender_id, borrower_id')
+          .select('id, amount_remaining, created_at, purpose, status')
           .or(`lender_id.eq.${user.id},borrower_id.eq.${user.id}`)
           .order('created_at', { ascending: false });
 
-        setRecords(
-          (data || []).map(r => ({
-            ...r,
-            category: 'pautang' as RecordCategory,
-          }))
-        );
+        if (response.error) {
+          console.error('Loans query error:', response.error);
+          setRecords([]);
+        } else {
+          data = response.data || [];
+          setRecords(
+            data.map(r => ({
+              id: r.id,
+              amount: r.amount_remaining,
+              date: r.created_at,
+              description: r.purpose,
+              status: r.status,
+              category: 'pautang' as RecordCategory,
+            }))
+          );
+        }
       } else if (selectedCategory === 'ambagan') {
         // Group expenses (ambagan)
-        const { data } = await supabase
+        const response = await supabase
           .from('group_expenses')
-          .select('id, amount, created_at as date, description')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false });
+          .select('id, total_amount, expense_date, title')
+          .eq('payer_id', user.id)
+          .order('expense_date', { ascending: false });
 
-        setRecords(
-          (data || []).map(r => ({
-            ...r,
-            category: 'ambagan' as RecordCategory,
-          }))
-        );
+        if (response.error) {
+          console.error('Group expenses query error:', response.error);
+          setRecords([]);
+        } else {
+          data = response.data || [];
+          setRecords(
+            data.map(r => ({
+              id: r.id,
+              amount: r.total_amount,
+              date: r.expense_date,
+              description: r.title,
+              category: 'ambagan' as RecordCategory,
+            }))
+          );
+        }
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to load records');
+      console.error('Error loading records:', error);
+      setRecords([]);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -115,13 +149,14 @@ export default function RecordsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Category Filter */}
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>Records</Text>
       </View>
 
+      {/* Category Filter - Horizontal Chips */}
       <View style={styles.filterContainer}>
-        {(['personal', 'pautang', 'ambagan'] as RecordCategory[]).map(cat => (
+        {(['personal', 'pautang', 'ambagan'] as RecordCategory[]).map((cat) => (
           <TouchableOpacity
             key={cat}
             style={[
@@ -129,11 +164,12 @@ export default function RecordsScreen() {
               selectedCategory === cat && styles.filterButtonActive,
             ]}
             onPress={() => setSelectedCategory(cat)}
+            activeOpacity={0.7}
           >
             <Ionicons
               name={getCategoryIcon(cat) as any}
-              size={18}
-              color={selectedCategory === cat ? '#ffffff' : colors.textSecondary}
+              size={16}
+              color={selectedCategory === cat ? '#ffffff' : colors.primary}
               style={{ marginRight: 6 }}
             />
             <Text
@@ -142,7 +178,7 @@ export default function RecordsScreen() {
                 selectedCategory === cat && styles.filterButtonTextActive,
               ]}
             >
-              {cat.charAt(0).toUpperCase() + cat.slice(1)}
+              {cat === 'personal' ? 'Personal' : cat === 'pautang' ? 'Loans' : 'Groups'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -154,18 +190,99 @@ export default function RecordsScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-        {records.length === 0 ? (
+        {loading ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="hourglass" size={48} color={colors.textLight} />
+            <Text style={styles.emptyText}>Loading records...</Text>
+          </View>
+        ) : records.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="document-outline" size={48} color={colors.textLight} />
             <Text style={styles.emptyText}>No {getCategoryLabel(selectedCategory).toLowerCase()} found</Text>
           </View>
+        ) : selectedCategory === 'pautang' ? (
+          // For loans, separate active/partial (unsettled) and paid (settled)
+          <>
+            {/* Unsettled Loans */}
+            {records.filter(r => r.status !== 'paid').length > 0 && (
+              <>
+                <Text style={styles.recordsGroupTitle}>Unsettled Loans</Text>
+                {records
+                  .filter(r => r.status !== 'paid')
+                  .map(record => (
+                    <TouchableOpacity
+                      key={record.id}
+                      style={styles.recordCard}
+                      onPress={() => {
+                        router.push({
+                          pathname: '/loan-detail',
+                          params: { id: record.id },
+                        });
+                      }}
+                    >
+                      <View style={styles.recordContent}>
+                        <View style={styles.recordInfo}>
+                          <Text style={styles.recordTitle} numberOfLines={1}>
+                            {record.description || 'Untitled'}
+                          </Text>
+                          <Text style={styles.recordDate}>
+                            {format(new Date(record.date), 'MMM d, yyyy')}
+                          </Text>
+                        </View>
+                        <Text style={styles.recordAmount}>{formatCurrency(record.amount)}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+              </>
+            )}
+
+            {/* Settled Loans */}
+            {records.filter(r => r.status === 'paid').length > 0 && (
+              <>
+                <Text style={[styles.recordsGroupTitle, { marginTop: 12 }]}>Settled Loans</Text>
+                {records
+                  .filter(r => r.status === 'paid')
+                  .map(record => (
+                    <TouchableOpacity
+                      key={record.id}
+                      style={styles.recordCard}
+                      onPress={() => {
+                        router.push({
+                          pathname: '/loan-detail',
+                          params: { id: record.id },
+                        });
+                      }}
+                    >
+                      <View style={styles.recordContent}>
+                        <View style={styles.recordInfo}>
+                          <Text style={styles.recordTitle} numberOfLines={1}>
+                            {record.description || 'Untitled'}
+                          </Text>
+                          <Text style={styles.recordDate}>
+                            {format(new Date(record.date), 'MMM d, yyyy')}
+                          </Text>
+                        </View>
+                        <Text style={[styles.recordAmount, { color: colors.success }]}>{formatCurrency(record.amount)}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+              </>
+            )}
+          </>
         ) : (
+          // For personal and ambagan
           records.map(record => (
             <TouchableOpacity
               key={record.id}
               style={styles.recordCard}
               onPress={() => {
-                // TODO: Navigate to detail/edit screen
+                if (selectedCategory === 'ambagan') {
+                  router.push({
+                    pathname: '/group-detail',
+                    params: { id: record.id },
+                  });
+                }
+                // TODO: Add navigation for personal expenses
               }}
             >
               <View style={styles.recordContent}>
@@ -196,31 +313,31 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       backgroundColor: colors.background,
     },
     header: {
-      paddingHorizontal: 20,
-      paddingTop: 16,
-      paddingBottom: 12,
+      paddingHorizontal: 24,
+      paddingTop: 56,
+      paddingBottom: 24,
     },
     title: {
-      fontSize: 24,
+      fontSize: 28,
       fontWeight: '700',
       color: colors.textPrimary,
     },
     filterContainer: {
       flexDirection: 'row',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      gap: 8,
+      paddingHorizontal: 20,
+      paddingVertical: 16,
+      gap: 10,
+      justifyContent: 'center',
     },
     filterButton: {
-      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       paddingVertical: 10,
-      paddingHorizontal: 12,
-      borderRadius: 12,
+      paddingHorizontal: 16,
+      borderRadius: 22,
       backgroundColor: colors.surface,
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: colors.border,
     },
     filterButtonActive: {
@@ -228,16 +345,17 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       borderColor: colors.primary,
     },
     filterButtonText: {
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: '600',
-      color: colors.textSecondary,
+      color: colors.textPrimary,
     },
     filterButtonTextActive: {
       color: '#ffffff',
     },
     content: {
       flex: 1,
-      paddingHorizontal: 16,
+      paddingHorizontal: 20,
+      paddingTop: 4,
     },
     emptyContainer: {
       flex: 1,
@@ -252,10 +370,10 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     },
     recordCard: {
       backgroundColor: colors.surface,
-      borderRadius: 12,
-      padding: 14,
-      marginBottom: 8,
-      elevation: 1,
+      borderRadius: 14,
+      padding: 16,
+      marginBottom: 12,
+      elevation: 2,
     },
     recordContent: {
       flexDirection: 'row',
@@ -267,18 +385,28 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       flex: 1,
     },
     recordTitle: {
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '600',
       color: colors.textPrimary,
-      marginBottom: 4,
+      marginBottom: 6,
     },
     recordDate: {
       fontSize: 12,
       color: colors.textSecondary,
     },
     recordAmount: {
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '700',
       color: colors.primary,
+    },
+    recordsGroupTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.textSecondary,
+      paddingHorizontal: 20,
+      paddingTop: 5,
+      paddingBottom: 5,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
   });
