@@ -244,6 +244,15 @@ export default function HomeScreen() {
             markedDates={stats.markedDates}
             markingType={'multi-dot'}
             onDayPress={handleDatePress}
+            renderHeader={(date: any) => {
+              const d = new Date(date);
+              const label = d.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
+              return (
+                <Text style={{ fontSize: 17, fontWeight: '700', color: colors.textPrimary }}>
+                  {label}
+                </Text>
+              );
+            }}
             theme={{
               backgroundColor: 'transparent',
               calendarBackground: 'transparent',
