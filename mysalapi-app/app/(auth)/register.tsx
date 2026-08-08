@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ScrollView, Alert, Image,
+  TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -89,111 +90,140 @@ export default function RegisterScreen() {
   const styles = makeStyles(colors);
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Image
-            source={require('../../assets/MySalapiLogo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.tagline}>Create your account</Text>
-        </View>
-
-        <View style={styles.form}>
-          <Text style={styles.title}>Get started</Text>
-
-          <Text style={styles.label}>Full Name *</Text>
-          <TextInput
-            style={styles.input} value={fullName} onChangeText={setFullName}
-            placeholder="Juan dela Cruz" placeholderTextColor={colors.textLight}
-          />
-
-          <Text style={styles.label}>Email *</Text>
-          <TextInput
-            style={styles.input} value={email} onChangeText={setEmail}
-            placeholder="you@email.com" placeholderTextColor={colors.textLight}
-            keyboardType="email-address" autoCapitalize="none"
-          />
-
-          <Text style={styles.label}>Phone Number</Text>
-          <TextInput
-            style={styles.input} value={phone} onChangeText={setPhone}
-            placeholder="09XXXXXXXXX" placeholderTextColor={colors.textLight}
-            keyboardType="phone-pad"
-          />
-
-          <Text style={styles.label}>Password *</Text>
-          <View style={styles.passwordContainer}>
-            <TextInput
-              style={styles.passwordInput}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Min. 8 chars, 1 Uppercaseletter, 1 number"
-              placeholderTextColor={colors.textLight}
-              secureTextEntry={!showPassword}
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <ScrollView 
+          contentContainerStyle={styles.scroll} 
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <Image
+              source={require('../../assets/MySalapiLogo.png')}
+              style={styles.logo}
+              resizeMode="contain"
             />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
-              <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
+            <Text style={styles.tagline}>Create your account</Text>
           </View>
 
-          <Text style={styles.label}>Confirm Password *</Text>
-          <View style={styles.passwordContainer}>
+          <View style={styles.form}>
+            <Text style={styles.title}>Get started</Text>
+
+            <Text style={styles.label}>Full Name *</Text>
             <TextInput
-              style={styles.passwordInput}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Re-enter your password"
+              style={styles.input} 
+              value={fullName} 
+              onChangeText={setFullName}
+              placeholder="Juan dela Cruz" 
               placeholderTextColor={colors.textLight}
-              secureTextEntry={!showConfirmPassword}
+              returnKeyType="next"
+              blurOnSubmit={false}
             />
-            <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeButton}>
-              <Ionicons name={showConfirmPassword ? 'eye-off' : 'eye'} size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
 
-          {password && confirmPassword && password !== confirmPassword && (
-            <Text style={styles.errorText}>⚠️ Passwords do not match!</Text>
-          )}
+            <Text style={styles.label}>Email *</Text>
+            <TextInput
+              style={styles.input} 
+              value={email} 
+              onChangeText={setEmail}
+              placeholder="you@email.com" 
+              placeholderTextColor={colors.textLight}
+              keyboardType="email-address" 
+              autoCapitalize="none"
+              returnKeyType="next"
+              blurOnSubmit={false}
+            />
 
-          <View style={styles.termsContainer}>
-            <TouchableOpacity
-              onPress={() => setAgreedToTerms(!agreedToTerms)}
-              style={styles.checkbox}
-            >
-              <Ionicons
-                name={agreedToTerms ? 'checkbox' : 'square-outline'}
-                size={24}
-                color={agreedToTerms ? colors.primary : colors.textSecondary}
+            <Text style={styles.label}>Phone Number</Text>
+            <TextInput
+              style={styles.input} 
+              value={phone} 
+              onChangeText={setPhone}
+              placeholder="09XXXXXXXXX" 
+              placeholderTextColor={colors.textLight}
+              keyboardType="phone-pad"
+              returnKeyType="next"
+              blurOnSubmit={false}
+            />
+
+            <Text style={styles.label}>Password *</Text>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                value={password}
+                onChangeText={setPassword}
+                placeholder="Min. 8 chars, 1 Uppercaseletter, 1 number"
+                placeholderTextColor={colors.textLight}
+                secureTextEntry={!showPassword}
+                returnKeyType="next"
+                blurOnSubmit={false}
               />
-            </TouchableOpacity>
-            <View style={styles.termsTextContainer}>
-              <Text style={styles.termsText}>I agree to the </Text>
-              <TouchableOpacity onPress={showTerms}>
-                <Text style={styles.termsLink}>Terms and Conditions</Text>
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
+                <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={22} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
-          </View>
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleRegister}
-            disabled={loading}
-          >
-            <Text style={styles.buttonText}>{loading ? 'Creating account...' : 'Create Account'}</Text>
-          </TouchableOpacity>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Already have an account? </Text>
-            <Link href="/(auth)/login" asChild>
-              <TouchableOpacity>
-                <Text style={styles.link}>Log in</Text>
+            <Text style={styles.label}>Confirm Password *</Text>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                placeholder="Re-enter your password"
+                placeholderTextColor={colors.textLight}
+                secureTextEntry={!showConfirmPassword}
+                returnKeyType="done"
+                onSubmitEditing={handleRegister}
+              />
+              <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.eyeButton}>
+                <Ionicons name={showConfirmPassword ? 'eye-off' : 'eye'} size={22} color={colors.textSecondary} />
               </TouchableOpacity>
-            </Link>
+            </View>
+
+            {password && confirmPassword && password !== confirmPassword && (
+              <Text style={styles.errorText}>⚠️ Passwords do not match!</Text>
+            )}
+
+            <View style={styles.termsContainer}>
+              <TouchableOpacity
+                onPress={() => setAgreedToTerms(!agreedToTerms)}
+                style={styles.checkbox}
+              >
+                <Ionicons
+                  name={agreedToTerms ? 'checkbox' : 'square-outline'}
+                  size={24}
+                  color={agreedToTerms ? colors.primary : colors.textSecondary}
+                />
+              </TouchableOpacity>
+              <View style={styles.termsTextContainer}>
+                <Text style={styles.termsText}>I agree to the </Text>
+                <TouchableOpacity onPress={showTerms}>
+                  <Text style={styles.termsLink}>Terms and Conditions</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleRegister}
+              disabled={loading}
+            >
+              <Text style={styles.buttonText}>{loading ? 'Creating account...' : 'Create Account'}</Text>
+            </TouchableOpacity>
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>Already have an account? </Text>
+              <Link href="/(auth)/login" asChild>
+                <TouchableOpacity>
+                  <Text style={styles.link}>Log in</Text>
+                </TouchableOpacity>
+              </Link>
+            </View>
           </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </TouchableWithoutFeedback>
 
       <AppModal
         visible={showEmailModal}
@@ -219,14 +249,14 @@ export default function RegisterScreen() {
 const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext').useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.primary },
-    scroll: { flexGrow: 1 },
-    header: { alignItems: 'center', paddingTop: 56, paddingBottom: 28 },
-    logo: { width: 170, height: 170, marginBottom: 0 },
+    scroll: { flexGrow: 1, paddingBottom: 20 },
+    header: { alignItems: 'center', paddingTop: 50, paddingBottom: 24 },
+    logo: { width: 140, height: 140, marginBottom: 0 },
     tagline: { fontSize: 14, color: 'rgba(255,255,255,0.85)', marginTop: 0, letterSpacing: 0.3 },
     form: {
       flex: 1, backgroundColor: colors.background,
       borderTopLeftRadius: 36, borderTopRightRadius: 36,
-      padding: 28, paddingTop: 32,
+      padding: 28, paddingTop: 32, minHeight: 600,
     },
     title: { fontSize: 26, fontWeight: '800', color: colors.textPrimary, marginBottom: 22 },
     label: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },
