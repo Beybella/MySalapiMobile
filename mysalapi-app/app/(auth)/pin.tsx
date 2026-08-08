@@ -92,7 +92,8 @@ export default function PinScreen() {
   const triggerBiometric = async () => {
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage: 'Use fingerprint to login',
-      fallbackLabel: 'Use PIN instead',
+      disableDeviceFallback: true,
+      cancelLabel: 'Use App PIN instead',
     });
     if (result.success) {
       setPinVerified(true);

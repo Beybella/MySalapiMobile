@@ -56,11 +56,11 @@ export default function HomeScreen() {
         supabase.from('loans').select('amount_remaining').eq('borrower_id', user.id).neq('status', 'paid'),
         supabase.from('loans').select('id').eq('lender_id', user.id).lt('due_date', today).neq('status', 'paid'),
         supabase.from('users').select('full_name').eq('id', user.id).single(),
-        supabase.from('bill_reminders').select('due_date, title, amount').eq('user_id', user.id).eq('is_paid', false)
+        supabase.from('bill_reminders').select('due_date, title, amount, is_paid').eq('user_id', user.id)
           .gte('due_date', today).lte('due_date', in30Days),
-        supabase.from('loans').select('due_date, amount_remaining, borrower:borrower_id(full_name), lender:lender_id(full_name)')
+        supabase.from('loans').select('due_date, amount_remaining, status, borrower:borrower_id(full_name), lender:lender_id(full_name)')
           .or(`lender_id.eq.${user.id},borrower_id.eq.${user.id}`)
-          .neq('status', 'paid').gte('due_date', today).lte('due_date', in30Days),
+          .gte('due_date', today).lte('due_date', in30Days),
       ]);
 
     setUserName(profile?.full_name || user.email?.split('@')[0] || 'User');
@@ -248,7 +248,6 @@ export default function HomeScreen() {
               backgroundColor: 'transparent',
               calendarBackground: 'transparent',
               textSectionTitleColor: colors.primary,
-              textSectionTitleFontWeight: '700',
               selectedDayBackgroundColor: colors.primary,
               selectedDayTextColor: '#ffffff',
               todayTextColor: colors.primary,
@@ -256,11 +255,9 @@ export default function HomeScreen() {
               dayTextColor: colors.textPrimary,
               textDisabledColor: colors.textLight,
               monthTextColor: colors.textPrimary,
-              textMonthFontWeight: '800',
               textDayFontSize: 15,
               textMonthFontSize: 17,
               textDayHeaderFontSize: 13,
-              textDayHeaderFontWeight: '600',
               arrowColor: colors.primary,
               dotColor: colors.primary,
             }}
@@ -351,12 +348,19 @@ export default function HomeScreen() {
                     <View style={[styles.dueDot, { backgroundColor: '#2196F3' }]} />
                     <Text style={styles.duesSectionTitle}>Bills ({duesOnDate.bills.length})</Text>
                   </View>
-                  {duesOnDate.bills.map((bill: any, idx: number) => (
-                    <View key={idx} style={styles.dueItem}>
-                      <Text style={styles.dueItemTitle}>{bill.title}</Text>
-                      <Text style={styles.dueItemAmount}>{formatCurrency(Number(bill.amount))}</Text>
-                    </View>
-                  ))}
+                  {duesOnDate.bills.map((bill: any, idx: number) => {
+                    const isPaid = bill.is_paid;
+                    return (
+                      <View key={idx} style={[styles.dueItem, isPaid && styles.dueItemPaid]}>
+                        <Text style={[styles.dueItemTitle, isPaid && styles.dueItemTitlePaid]}>
+                          {bill.title}
+                        </Text>
+                        <Text style={[styles.dueItemAmount, isPaid && styles.dueItemAmountPaid]}>
+                          {formatCurrency(Number(bill.amount))}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
               )}
 
@@ -366,14 +370,19 @@ export default function HomeScreen() {
                     <View style={[styles.dueDot, { backgroundColor: '#FF5252' }]} />
                     <Text style={styles.duesSectionTitle}>Loans ({duesOnDate.loans.length})</Text>
                   </View>
-                  {duesOnDate.loans.map((loan: any, idx: number) => (
-                    <View key={idx} style={styles.dueItem}>
-                      <Text style={styles.dueItemTitle}>
-                        {loan.borrower?.full_name || loan.lender?.full_name || 'Loan'}
-                      </Text>
-                      <Text style={styles.dueItemAmount}>{formatCurrency(Number(loan.amount_remaining))}</Text>
-                    </View>
-                  ))}
+                  {duesOnDate.loans.map((loan: any, idx: number) => {
+                    const isPaid = loan.status === 'paid';
+                    return (
+                      <View key={idx} style={[styles.dueItem, isPaid && styles.dueItemPaid]}>
+                        <Text style={[styles.dueItemTitle, isPaid && styles.dueItemTitlePaid]}>
+                          {loan.borrower?.full_name || loan.lender?.full_name || 'Loan'}
+                        </Text>
+                        <Text style={[styles.dueItemAmount, isPaid && styles.dueItemAmountPaid]}>
+                          {formatCurrency(Number(loan.amount_remaining))}
+                        </Text>
+                      </View>
+                    );
+                  })}
                 </View>
               )}
 
@@ -585,6 +594,9 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       borderRadius: 12,
       marginBottom: 8,
     },
+    dueItemPaid: {
+      backgroundColor: colors.textLight + '20',
+    },
     dueItemTitle: {
       fontSize: 14,
       color: colors.textPrimary,
@@ -592,10 +604,18 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       flex: 1,
       marginRight: 12,
     },
+    dueItemTitlePaid: {
+      textDecorationLine: 'line-through',
+      color: colors.textSecondary,
+    },
     dueItemAmount: {
       fontSize: 14,
       color: colors.primary,
       fontWeight: '700',
+    },
+    dueItemAmountPaid: {
+      textDecorationLine: 'line-through',
+      color: colors.textSecondary,
     },
     emptyDues: {
       alignItems: 'center',

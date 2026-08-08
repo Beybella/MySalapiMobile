@@ -12,7 +12,7 @@ interface DraggableModalProps {
   visible: boolean;
   onClose: () => void;
   children: React.ReactNode;
-  maxHeight?: string | number;
+  maxHeight?: number | `${number}%`;
 }
 
 export default function DraggableModal({

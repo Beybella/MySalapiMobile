@@ -54,20 +54,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!resolved) { resolved = true; setLoading(false); }
     }, 5000);
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    supabase.auth.getSession().then(({ data: { session: s }, error }) => {
       if (!resolved) {
         resolved = true;
         clearTimeout(timeout);
-        setSession(s);
-        sessionRef.current = s;
+        // If refresh token is invalid/expired, clear stale session
+        if (error?.message?.toLowerCase().includes('refresh token')) {
+          supabase.auth.signOut();
+          setSession(null);
+          sessionRef.current = null;
+        } else {
+          setSession(s);
+          sessionRef.current = s;
+          if (s) resetInactivityTimer();
+        }
         setLoading(false);
-        if (s) resetInactivityTimer();
       }
     }).catch(() => {
       if (!resolved) { resolved = true; clearTimeout(timeout); setLoading(false); }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      // Auto sign-out on invalid refresh token
+      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
+        if (!s && event === 'TOKEN_REFRESHED') {
+          supabase.auth.signOut();
+        }
+      }
       setSession(s);
       sessionRef.current = s;
       setLoading(false);
