@@ -164,12 +164,12 @@ php artisan key:generate
 
 ```bash
 cd mysalapi-backend
-php artisan serve
+php artisan serve --host=0.0.0.0 --port=8000
 ```
 
 Expected output:
 ```
-INFO  Server running on [http://127.0.0.1:8000].
+INFO  Server running on [http://0.0.0.0:8000].
 
 Press Ctrl+C to stop the server
 ```
@@ -178,6 +178,8 @@ Press Ctrl+C to stop the server
 ```bash
 curl http://localhost:8000/api/health
 ```
+
+> **Note**: The `--host=0.0.0.0` flag allows the frontend (on your phone/emulator) to connect from your machine's IP address.
 
 ---
 
@@ -217,6 +219,30 @@ php artisan test
 
 ---
 
+## ✉️ Email Confirmation Flow (Registration)
+
+When a user registers:
+
+1. **User enters email** in the app
+2. **App calls Laravel** with email, password, name, and phone
+3. **Laravel creates user in Supabase** using the Admin API (bypassing built-in SMTP which doesn't work reliably)
+4. **Laravel generates a token** containing email & user ID
+5. **Confirmation email is sent via Brevo** with a link containing the token
+6. **User clicks the confirmation link** → redirects to `email-confirmed.html`
+7. **Confirmation endpoint** (`/api/auth/confirm-email?token=...`) confirms the user in Supabase
+8. **User can now login** with their credentials
+
+### To test email confirmation:
+
+1. Make sure backend is running with Brevo credentials configured
+2. Register a new account in the app
+3. Check your email inbox (or Brevo dashboard: https://app.brevo.com → Transactional → Logs)
+4. Click the confirmation link in the email
+5. You should see the "Email Confirmed" page
+6. Log in with your credentials
+
+---
+
 ## ✉️ Testing Email (Singil Feature)
 
 When debt collection email is triggered:
@@ -253,9 +279,16 @@ php artisan serve --port=8001
 
 ### Issue: Expo app won't connect to backend
 **Solution**:
-1. Get your machine IP: `ipconfig getifaddr en0` (Mac) or `ipconfig` (Windows)
-2. Update backend URL in app code
-3. Restart Expo app
+1. Get your machine IP: `ipconfig` (Windows)
+2. Update `EXPO_PUBLIC_API_URL` in **mysalapi-app/.env**:
+   ```env
+   EXPO_PUBLIC_API_URL=http://YOUR_MACHINE_IP:8000/api
+   ```
+3. Update `APP_URL` in **mysalapi-backend/.env**:
+   ```env
+   APP_URL=http://YOUR_MACHINE_IP:8000
+   ```
+4. Restart both backend and frontend
 
 ### Issue: Supabase authentication fails
 **Solution**:
@@ -381,5 +414,5 @@ If you encounter issues:
 
 ---
 
-**Last Updated**: May 2026  
-**Version**: 1.0
+**Last Updated**: August 2026  
+**Version**: 1.1
