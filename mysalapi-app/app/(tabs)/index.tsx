@@ -37,6 +37,7 @@ export default function HomeScreen() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [duesOnDate, setDuesOnDate] = useState<{ bills: any[], loans: any[] }>({ bills: [], loans: [] });
   const [modalTab, setModalTab] = useState<'unsettled' | 'paid'>('unsettled');
+  const [calendarExpanded, setCalendarExpanded] = useState(false);
 
   const loadDashboard = async () => {
     if (!user) return;
@@ -142,6 +143,24 @@ export default function HomeScreen() {
   const formatCurrency = (n: number) =>
     `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+  // Get current week dates for horizontal calendar
+  const getCurrentWeekDates = () => {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - dayOfWeek); // Go to Sunday
+    
+    const week = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + i);
+      week.push(date);
+    }
+    return week;
+  };
+
+  const weekDates = getCurrentWeekDates();
+  const todayStr = new Date().toISOString().split('T')[0];
   const styles = makeStyles(colors);
 
   return (
@@ -151,49 +170,161 @@ export default function HomeScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
       >
-      {/* ── Hero Header ── */}
-      <View style={styles.hero}>
-        <View style={styles.heroTop}>
-          <View style={styles.heroLeft}>
-            <Image
-              source={require('../../assets/MySalapiLogo.png')}
-              style={styles.heroLogo}
-              resizeMode="contain"
-            />
-            <View>
-              <Text style={styles.heroGreeting}>Good day,</Text>
-              <Text style={styles.heroName}>{userName}</Text>
-            </View>
+      {/* ── Modern Header with Greeting ── */}
+      <View style={styles.modernHeader}>
+        <View style={styles.modernHeaderTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>Good day,</Text>
+            <Text style={styles.userName}>{userName}</Text>
+            <Text style={styles.currentDate}>{format(new Date(), 'EEEE, d MMMM, yyyy')}</Text>
           </View>
-          <TouchableOpacity onPress={handleSignOut} style={styles.logoutBtn}>
-            <Ionicons name="log-out-outline" size={20} color="rgba(255,255,255,0.8)" />
-          </TouchableOpacity>
+          <View style={styles.headerRight}>
+            <TouchableOpacity onPress={handleSignOut} style={styles.logoutIconBtn}>
+              <Ionicons name="log-out-outline" size={20} color="#ffffff" />
+            </TouchableOpacity>
+          </View>
         </View>
+      </View>
 
-        {/* Monthly spend highlight */}
-        <View style={styles.spendCard}>
-          <Text style={styles.spendLabel}>Total Spent This Month</Text>
-          <Text style={styles.spendAmount}>{formatCurrency(stats.totalExpenses)}</Text>
-          <View style={styles.spendDivider} />
-          <View style={styles.spendRow}>
-            <View style={styles.spendItem}>
-              <Text style={styles.spendItemValue} numberOfLines={1}>{formatCurrency(stats.totalLoansGiven)}</Text>
-              <Text style={styles.spendItemLabel}>To Collect</Text>
-            </View>
-            <View style={styles.spendSep} />
-            <View style={styles.spendItem}>
-              <Text style={[styles.spendItemValue, { color: colors.error }]} numberOfLines={1}>
-                {formatCurrency(stats.totalLoansOwed)}
-              </Text>
-              <Text style={styles.spendItemLabel}>I Owe</Text>
-            </View>
-            <View style={styles.spendSep} />
-            <View style={styles.spendItem}>
-              <Text style={styles.spendItemValue}>{stats.upcomingBills.length}</Text>
-              <Text style={styles.spendItemLabel}>Bills Due</Text>
-            </View>
+      {/* ── Old Quick Stats Card ── */}
+      <View style={styles.statsCard}>
+        <View style={styles.statsHeader}>
+          <Text style={styles.statsTitle}>Monthly Overview</Text>
+          <Text style={styles.statsAmount}>{formatCurrency(stats.totalExpenses)}</Text>
+        </View>
+        <View style={styles.statsDivider} />
+        <View style={styles.statsRow}>
+          <View style={styles.statsItem}>
+            <Text style={styles.statsItemValue} numberOfLines={1}>{formatCurrency(stats.totalLoansGiven)}</Text>
+            <Text style={styles.statsItemLabel}>To Collect</Text>
+          </View>
+          <View style={styles.statsSep} />
+          <View style={styles.statsItem}>
+            <Text style={[styles.statsItemValue, { color: colors.error }]} numberOfLines={1}>
+              {formatCurrency(stats.totalLoansOwed)}
+            </Text>
+            <Text style={styles.statsItemLabel}>I Owe</Text>
+          </View>
+          <View style={styles.statsSep} />
+          <View style={styles.statsItem}>
+            <Text style={styles.statsItemValue}>{stats.upcomingBills.length}</Text>
+            <Text style={styles.statsItemLabel}>Bills Due</Text>
           </View>
         </View>
+      </View>
+
+      {/* ── Calendar (Expands Seamlessly) ── */}
+      <View style={styles.weekCalendarContainer}>
+        {!calendarExpanded ? (
+          <>
+            <View style={styles.weekCalendar}>
+              {weekDates.map((date, index) => {
+                const dateStr = date.toISOString().split('T')[0];
+                const isToday = dateStr === todayStr;
+                const dayLabel = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][index];
+                const dayNum = date.getDate();
+                const hasDues = stats.markedDates[dateStr];
+                
+                return (
+                  <TouchableOpacity
+                    key={dateStr}
+                    style={styles.weekDayContainer}
+                    onPress={() => handleDatePress({ dateString: dateStr })}
+                  >
+                    <Text style={styles.weekDayLabel}>{dayLabel}</Text>
+                    <View style={[
+                      styles.weekDayCircle,
+                      isToday && styles.weekDayCircleToday,
+                    ]}>
+                      <Text style={[
+                        styles.weekDayNum,
+                        isToday && styles.weekDayNumToday,
+                      ]}>{dayNum}</Text>
+                    </View>
+                    {hasDues && (
+                      <View style={styles.weekDayDots}>
+                        {hasDues.dots.map((dot: any, i: number) => (
+                          <View key={i} style={[styles.weekDayDot, { backgroundColor: dot.color }]} />
+                        ))}
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            
+            <View style={styles.compactLegend}>
+              <View style={{ flexDirection: 'row', gap: 16 }}>
+                <View style={styles.compactLegendItem}>
+                  <View style={[styles.compactLegendDot, { backgroundColor: '#2196F3' }]} />
+                  <Text style={styles.compactLegendText}>Bills</Text>
+                </View>
+                <View style={styles.compactLegendItem}>
+                  <View style={[styles.compactLegendDot, { backgroundColor: '#FF5252' }]} />
+                  <Text style={styles.compactLegendText}>Loans</Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.expandButton}
+                onPress={() => setCalendarExpanded(true)}
+              >
+                <Ionicons name="chevron-down" size={16} color={colors.primary} />
+                <Text style={styles.expandButtonText}>Expand</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <>
+            <Calendar
+              markedDates={stats.markedDates}
+              markingType={'multi-dot'}
+              onDayPress={handleDatePress}
+              renderHeader={(date: any) => {
+                const d = new Date(date);
+                const label = d.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
+                return <Text style={styles.expandedCalendarHeader}>{label}</Text>;
+              }}
+              theme={{
+                backgroundColor: 'transparent',
+                calendarBackground: 'transparent',
+                textSectionTitleColor: colors.textSecondary,
+                selectedDayBackgroundColor: colors.primary,
+                selectedDayTextColor: '#ffffff',
+                todayTextColor: '#ffffff',
+                todayBackgroundColor: colors.primary,
+                dayTextColor: colors.textPrimary,
+                textDisabledColor: colors.textLight,
+                monthTextColor: colors.textPrimary,
+                textDayFontSize: 16,
+                textMonthFontSize: 18,
+                textDayHeaderFontSize: 12,
+                arrowColor: colors.primary,
+                dotColor: colors.primary,
+              }}
+              style={styles.expandedCalendar}
+            />
+            
+            <View style={styles.compactLegend}>
+              <View style={{ flexDirection: 'row', gap: 16 }}>
+                <View style={styles.compactLegendItem}>
+                  <View style={[styles.compactLegendDot, { backgroundColor: '#2196F3' }]} />
+                  <Text style={styles.compactLegendText}>Bills</Text>
+                </View>
+                <View style={styles.compactLegendItem}>
+                  <View style={[styles.compactLegendDot, { backgroundColor: '#FF5252' }]} />
+                  <Text style={styles.compactLegendText}>Loans</Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                style={styles.expandButton}
+                onPress={() => setCalendarExpanded(false)}
+              >
+                <Ionicons name="chevron-up" size={16} color={colors.primary} />
+                <Text style={styles.expandButtonText}>Collapse</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </View>
 
       {/* ── Overdue Alert ── */}
@@ -208,83 +339,6 @@ export default function HomeScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.error} />
         </TouchableOpacity>
       )}
-
-      {/* ── Quick Actions ── */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.actionsScroll}>
-          {[
-            { label: 'Expense', icon: 'wallet-outline', route: '/(tabs)/personal', color: colors.personalLedger },
-            { label: 'Loan', icon: 'people-outline', route: '/(tabs)/pautang', color: colors.pautangLedger },
-            { label: 'Ambagan', icon: 'grid-outline', route: '/(tabs)/ambagan', color: colors.ambaganLedger },
-            { label: 'Budget', icon: 'bar-chart-outline', route: '/(tabs)/budget', color: colors.budgetPlanner },
-            { label: 'Reports', icon: 'pie-chart-outline', route: '/reports', color: colors.primary },
-          ].map((action) => (
-            <TouchableOpacity
-              key={action.label}
-              style={styles.actionChip}
-              onPress={() => router.push(action.route as any)}
-            >
-              <View style={[styles.actionChipIcon, { backgroundColor: action.color + '20' }]}>
-                <Ionicons name={action.icon as any} size={22} color={action.color} />
-              </View>
-              <Text style={styles.actionChipLabel}>{action.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {/* ── Calendar View ── */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Upcoming Dues Calendar</Text>
-          <Ionicons name="calendar-outline" size={20} color={colors.primary} />
-        </View>
-        <View style={styles.calendarCard}>
-          <Calendar
-            markedDates={stats.markedDates}
-            markingType={'multi-dot'}
-            onDayPress={handleDatePress}
-            renderHeader={(date: any) => {
-              const d = new Date(date);
-              const label = d.toLocaleDateString('en-PH', { month: 'long', year: 'numeric' });
-              return (
-                <Text style={{ fontSize: 17, fontWeight: '700', color: colors.textPrimary }}>
-                  {label}
-                </Text>
-              );
-            }}
-            theme={{
-              backgroundColor: 'transparent',
-              calendarBackground: 'transparent',
-              textSectionTitleColor: colors.primary,
-              selectedDayBackgroundColor: colors.primary,
-              selectedDayTextColor: '#ffffff',
-              todayTextColor: colors.primary,
-              todayBackgroundColor: colors.primary + '15',
-              dayTextColor: colors.textPrimary,
-              textDisabledColor: colors.textLight,
-              monthTextColor: colors.textPrimary,
-              textDayFontSize: 15,
-              textMonthFontSize: 17,
-              textDayHeaderFontSize: 13,
-              arrowColor: colors.primary,
-              dotColor: colors.primary,
-            }}
-            style={styles.calendar}
-          />
-          <View style={styles.calendarLegend}>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#2196F3' }]} />
-              <Text style={styles.legendText}>Bills</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: '#FF5252' }]} />
-              <Text style={styles.legendText}>Loans</Text>
-            </View>
-          </View>
-        </View>
-      </View>
 
       {/* ── Upcoming Bills ── */}
       <View style={styles.section}>
@@ -450,34 +504,262 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
 
-    // Hero
-    hero: { backgroundColor: colors.primary, paddingTop: 56, paddingHorizontal: 20, paddingBottom: 24 },
-    heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    heroLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    heroLogo: { width: 40, height: 40, borderRadius: 10 },
-    heroGreeting: { fontSize: 12, color: 'rgba(255,255,255,0.65)' },
-    heroName: { fontSize: 18, fontWeight: '700', color: '#fff' },
-    logoutBtn: { padding: 6 },
-
-    // Spend card inside hero
-    spendCard: {
-      backgroundColor: 'rgba(255,255,255,0.12)',
-      borderRadius: 16, padding: 18,
-      borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    // Modern Header
+    modernHeader: {
+      backgroundColor: colors.primary,
+      paddingTop: 56,
+      paddingHorizontal: 20,
+      paddingBottom: 20,
+      borderBottomLeftRadius: 28,
+      borderBottomRightRadius: 28,
+      marginBottom: 16,
     },
-    spendLabel: { fontSize: 12, color: 'rgba(255,255,255,0.65)', marginBottom: 4 },
-    spendAmount: { fontSize: 32, fontWeight: '800', color: '#fff', marginBottom: 14 },
-    spendDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginBottom: 14 },
-    spendRow: { flexDirection: 'row', alignItems: 'center' },
-    spendItem: { flex: 1, alignItems: 'center' },
-    spendItemValue: { fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 2 },
-    spendItemLabel: { fontSize: 11, color: 'rgba(255,255,255,0.6)' },
-    spendSep: { width: 1, height: 28, backgroundColor: 'rgba(255,255,255,0.2)' },
+    headerLogo: {
+      marginLeft: 12,
+    },
+    logoImage: {
+      width: 40,
+      height: 40,
+    },
+    modernHeaderTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    headerRight: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      justifyContent: 'center',
+    },
+    logoutIconBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    greeting: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: '#ffffff',
+      marginBottom: 4,
+      letterSpacing: 0.3,
+    },
+    userName: {
+      fontSize: 28,
+      fontWeight: '800',
+      color: '#ffffff',
+      marginBottom: 8,
+      letterSpacing: 0.5,
+    },
+    currentDate: {
+      fontSize: 12,
+      color: '#ffffff',
+      fontWeight: '500',
+    },
+    avatarContainer: {
+      width: 50,
+      height: 50,
+      borderRadius: 25,
+      overflow: 'hidden',
+      backgroundColor: colors.surface,
+      elevation: 3,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+    },
+    avatar: {
+      width: '100%',
+      height: '100%',
+    },
+
+    // Week Calendar with Circles
+    weekCalendarContainer: {
+      backgroundColor: colors.surface,
+      marginHorizontal: 16,
+      borderRadius: 24,
+      padding: 20,
+      elevation: 3,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      marginBottom: 16,
+    },
+    weekCalendar: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      marginBottom: 16,
+    },
+    weekDayContainer: {
+      alignItems: 'center',
+      gap: 8,
+    },
+    weekDayLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      letterSpacing: 0.3,
+    },
+    weekDayCircle: {
+      width: 46,
+      height: 46,
+      borderRadius: 23,
+      backgroundColor: colors.background,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: colors.border,
+    },
+    weekDayCircleToday: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+      elevation: 4,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.4,
+      shadowRadius: 6,
+    },
+    weekDayNum: {
+      fontSize: 17,
+      fontWeight: '700',
+      color: colors.textPrimary,
+    },
+    weekDayNumToday: {
+      color: '#ffffff',
+    },
+    weekDayDots: {
+      flexDirection: 'row',
+      gap: 4,
+    },
+    weekDayDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+    },
+
+    // Compact Legend
+    compactLegend: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    compactLegendItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+    },
+    compactLegendDot: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+    },
+    compactLegendText: {
+      fontSize: 13,
+      color: colors.textPrimary,
+      fontWeight: '700',
+    },
+    expandButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      backgroundColor: colors.primary + '15',
+      borderRadius: 12,
+    },
+    expandButtonText: {
+      fontSize: 12,
+      color: colors.primary,
+      fontWeight: '700',
+    },
+
+    expandedCalendar: {
+      marginBottom: 12,
+    },
+    expandedCalendarHeader: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: 12,
+    },
+
+    // Old Stats Card (Enhanced)
+    statsCard: {
+      backgroundColor: colors.surface,
+      marginHorizontal: 16,
+      borderRadius: 24,
+      padding: 24,
+      elevation: 3,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      marginBottom: 16,
+    },
+    statsHeader: {
+      marginBottom: 20,
+    },
+    statsTitle: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      marginBottom: 8,
+      fontWeight: '600',
+      letterSpacing: 0.5,
+      textTransform: 'uppercase',
+    },
+    statsAmount: {
+      fontSize: 32,
+      fontWeight: '800',
+      color: colors.primary,
+      letterSpacing: 0.5,
+    },
+    statsDivider: {
+      height: 1.5,
+      backgroundColor: colors.border,
+      marginBottom: 20,
+      opacity: 0.5,
+    },
+    statsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    statsItem: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    statsItemValue: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.textPrimary,
+      marginBottom: 6,
+    },
+    statsItemLabel: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      fontWeight: '600',
+      letterSpacing: 0.3,
+    },
+    statsSep: {
+      width: 1.5,
+      height: 36,
+      backgroundColor: colors.border,
+      opacity: 0.5,
+    },
 
     // Alert
     alertBanner: {
       flexDirection: 'row', alignItems: 'center', gap: 10,
-      marginHorizontal: 16, marginTop: 12,
+      marginHorizontal: 16, marginBottom: 12,
       backgroundColor: colors.error + '12',
       borderRadius: 12, padding: 12,
       borderWidth: 1, borderColor: colors.error + '30',
@@ -495,14 +777,6 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.textPrimary },
     seeAll: { fontSize: 13, color: colors.primary, fontWeight: '600' },
 
-    // Quick actions horizontal scroll
-    actionsScroll: { marginTop: 12 },
-    actionChip: { alignItems: 'center', marginRight: 16, width: 64 },
-    actionChipIcon: {
-      width: 52, height: 52, borderRadius: 16,
-      justifyContent: 'center', alignItems: 'center', marginBottom: 6,
-    },
-    actionChipLabel: { fontSize: 11, fontWeight: '600', color: colors.textSecondary, textAlign: 'center' },
 
     // Bills
     emptyCard: {
@@ -672,7 +946,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       marginBottom: 8,
     },
     dueItemPaid: {
-      backgroundColor: colors.success + '15',  // Light green background
+      backgroundColor: '#f0f0f0',  // Light gray background
     },
     dueItemTitle: {
       fontSize: 14,
@@ -683,7 +957,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     },
     dueItemTitlePaid: {
       textDecorationLine: 'line-through',
-      color: colors.success,  // Green text
+      color: '#999999',  // Gray text
     },
     dueItemAmount: {
       fontSize: 14,
@@ -692,7 +966,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     },
     dueItemAmountPaid: {
       textDecorationLine: 'line-through',
-      color: colors.success,  // Green text
+      color: '#999999',  // Gray text
     },
     emptyDues: {
       alignItems: 'center',

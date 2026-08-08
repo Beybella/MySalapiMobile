@@ -225,4 +225,56 @@ class AuthController extends Controller
         </html>
         HTML;
     }
+
+    /**
+     * GET /api/auth/confirm-email?token=...
+     * Handle email confirmation token from Supabase magic link.
+     * Decodes token, confirms user in Supabase, and redirects to success page.
+     */
+    public function confirmEmail(Request $request)
+    {
+        try {
+            $token = $request->query('token');
+            if (!$token) {
+                return response('<h1>Invalid confirmation link</h1><p>No token provided.</p>', 400);
+            }
+
+            // Decode the token (it's base64url encoded JSON)
+            $decoded = json_decode(base64_decode(strtr($token, '-_', '+/')), true);
+            if (!$decoded || !isset($decoded['email'], $decoded['user_id'])) {
+                return response('<h1>Invalid confirmation link</h1><p>Malformed token.</p>', 400);
+            }
+
+            $email  = $decoded['email'];
+            $userId = $decoded['user_id'];
+
+            // Confirm user in Supabase via Admin API
+            $supabaseUrl = env('SUPABASE_URL');
+            $serviceKey  = env('SUPABASE_SERVICE_KEY');
+
+            $response = Http::withHeaders([
+                'apikey'        => $serviceKey,
+                'Authorization' => "Bearer {$serviceKey}",
+                'Content-Type'  => 'application/json',
+            ])->patch("{$supabaseUrl}/auth/v1/admin/users/{$userId}", [
+                'email_confirm' => true,
+            ]);
+
+            if (!$response->successful()) {
+                \Illuminate\Support\Facades\Log::error('Email confirmation failed', [
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                ]);
+                return response('<h1>Confirmation failed</h1><p>Please try again later.</p>', 500);
+            }
+
+            // Redirect to success page (using full redirect response)
+            $successUrl = 'https://krizxei.github.io/MySalapiMobile/email-confirmed.html';
+            return redirect()->away($successUrl);
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Email confirmation error', ['error' => $e->getMessage()]);
+            return response('<h1>Invalid confirmation link</h1><p>An error occurred. Please try again.</p>', 400);
+        }
+    }
 }
