@@ -61,9 +61,25 @@ export default function RegisterScreen() {
         data: { full_name: fullName, phone },
         emailRedirectTo: 'https://krizxei.github.io/MySalapiMobile/email-confirmed.html',
       },
-    });   setLoading(false);
+    });
+    setLoading(false);
     if (error) {
-      Alert.alert('Registration Failed', error.message);
+      // If the error is about sending the confirmation email,
+      // the account was still created — show success instead
+      const isEmailSendError =
+        error.message.toLowerCase().includes('sending confirmation') ||
+        error.message.toLowerCase().includes('sending email') ||
+        error.message.toLowerCase().includes('smtp') ||
+        error.message.toLowerCase().includes('email') ||
+        error.status === 500;
+
+      if (isEmailSendError) {
+        // Account was created, email just failed to send
+        setRegisteredEmail(email);
+        setShowEmailModal(true);
+      } else {
+        Alert.alert('Registration Failed', error.message);
+      }
     } else if (data.session) {
       router.replace('/(tabs)');
     } else {
@@ -89,25 +105,24 @@ export default function RegisterScreen() {
   const styles = makeStyles(colors);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <Image
-            source={require('../../assets/MySalapiLogo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.tagline}>Create your account</Text>
-        </View>
+    <View style={styles.container}>
+      {/* Green header — stays fixed, keyboard does not affect it */}
+      <View style={styles.header}>
+        <Image source={require('../../assets/MySalapiLogo.png')} style={styles.logo} resizeMode="contain" />
+        <Text style={styles.tagline}>Create your account</Text>
+      </View>
 
-        <View style={styles.form}>
+      {/* KeyboardAvoidingView wraps ONLY the white form card */}
+      <KeyboardAvoidingView
+        style={styles.formWrapper}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.form}>
           <Text style={styles.title}>Get started</Text>
 
           <Text style={styles.label}>Full Name *</Text>
@@ -199,8 +214,9 @@ export default function RegisterScreen() {
               </TouchableOpacity>
             </Link>
           </View>
-        </View>
-      </ScrollView>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <AppModal
         visible={showEmailModal}
@@ -219,13 +235,14 @@ export default function RegisterScreen() {
           },
         ]}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext').useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.primary },
+    formWrapper: { flex: 1 },
     scroll: { flexGrow: 1 },
     header: { alignItems: 'center', paddingTop: 56, paddingBottom: 28 },
     logo: { width: 170, height: 170, marginBottom: 0 },

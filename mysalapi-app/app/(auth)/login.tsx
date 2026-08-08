@@ -1,15 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  KeyboardAvoidingView, Platform, ScrollView, Alert, Image,
+  ScrollView, Alert, Image, Keyboard, Platform,
 } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
-import * as SecureStore from 'expo-secure-store';
 import AppModal from '../../components/AppModal';
-
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -19,14 +17,24 @@ export default function LoginScreen() {
   const [showUnverifiedModal, setShowUnverifiedModal] = useState(false);
   const [showResentModal, setShowResentModal] = useState(false);
   const [showForgotSentModal, setShowForgotSentModal] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const router = useRouter();
   const { colors } = useTheme();
 
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setKeyboardHeight(0)
+    );
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, []);
+
   const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please fill in all fields.');
-      return;
-    }
+    if (!email || !password) { Alert.alert('Error', 'Please fill in all fields.'); return; }
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
@@ -44,82 +52,54 @@ export default function LoginScreen() {
   const handleResendEmail = async () => {
     const { error: resendError } = await supabase.auth.resend({ type: 'signup', email });
     setShowUnverifiedModal(false);
-    if (resendError) {
-      Alert.alert('Error', resendError.message);
-    } else {
-      setShowResentModal(true);
-    }
+    if (resendError) { Alert.alert('Error', resendError.message); }
+    else { setShowResentModal(true); }
   };
 
   const handleForgotPassword = async () => {
-    if (!email) {
-      Alert.alert('Enter Email', 'Please enter your email address first, then tap Forgot Password.');
-      return;
-    }
-   const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    if (!email) { Alert.alert('Enter Email', 'Please enter your email address first, then tap Forgot Password.'); return; }
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: 'https://krizxei.github.io/MySalapiMobile/reset-password.html',
-    });   if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      setShowForgotSentModal(true);
-    }
+    });
+    if (error) { Alert.alert('Error', error.message); }
+    else { setShowForgotSentModal(true); }
   };
 
   const styles = makeStyles(colors);
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[styles.scroll, { paddingBottom: keyboardHeight }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
+        {/* Green header */}
         <View style={styles.header}>
-          <Image
-            source={require('../../assets/MySalapiLogo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          <Image source={require('../../assets/MySalapiLogo.png')} style={styles.logo} resizeMode="contain" />
           <Text style={styles.tagline}>Your personal finance tracker</Text>
         </View>
 
+        {/* White form card */}
         <View style={styles.form}>
           <Text style={styles.title}>Welcome back</Text>
 
           <Text style={styles.label}>Email</Text>
           <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@email.com"
-            placeholderTextColor={colors.textLight}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
+            style={styles.input} value={email} onChangeText={setEmail}
+            placeholder="you@email.com" placeholderTextColor={colors.textLight}
+            keyboardType="email-address" autoCapitalize="none" autoComplete="email"
           />
 
           <Text style={styles.label}>Password</Text>
           <View style={styles.passwordContainer}>
             <TextInput
-              style={styles.passwordInput}
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              placeholderTextColor={colors.textLight}
+              style={styles.passwordInput} value={password} onChangeText={setPassword}
+              placeholder="••••••••" placeholderTextColor={colors.textLight}
               secureTextEntry={!showPassword}
             />
-            <TouchableOpacity
-              onPress={() => setShowPassword(!showPassword)}
-              style={styles.eyeButton}
-            >
-              <Ionicons
-                name={showPassword ? 'eye-off' : 'eye'}
-                size={22}
-                color={colors.textSecondary}
-              />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
+              <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -129,8 +109,7 @@ export default function LoginScreen() {
 
           <TouchableOpacity
             style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleLogin}
-            disabled={loading}
+            onPress={handleLogin} disabled={loading}
           >
             <Text style={styles.buttonText}>{loading ? 'Logging in...' : 'Log In'}</Text>
           </TouchableOpacity>
@@ -138,47 +117,31 @@ export default function LoginScreen() {
           <View style={styles.footer}>
             <Text style={styles.footerText}>Don't have an account? </Text>
             <Link href="/(auth)/register" asChild>
-              <TouchableOpacity>
-                <Text style={styles.link}>Sign up</Text>
-              </TouchableOpacity>
+              <TouchableOpacity><Text style={styles.link}>Sign up</Text></TouchableOpacity>
             </Link>
           </View>
         </View>
       </ScrollView>
 
-      <AppModal
-        visible={showUnverifiedModal}
-        onClose={() => setShowUnverifiedModal(false)}
-        icon="mail-unread-outline"
-        iconColor={colors.warning}
-        title="Email Not Verified"
+      <AppModal visible={showUnverifiedModal} onClose={() => setShowUnverifiedModal(false)}
+        icon="mail-unread-outline" iconColor={colors.warning} title="Email Not Verified"
         message="Your email address hasn't been verified yet. Want us to resend the verification email?"
         buttons={[
           { label: 'Cancel', variant: 'secondary', onPress: () => setShowUnverifiedModal(false) },
           { label: 'Resend Email', onPress: handleResendEmail },
         ]}
       />
-
-      <AppModal
-        visible={showResentModal}
-        onClose={() => setShowResentModal(false)}
-        icon="checkmark-circle"
-        title="Verification Sent!"
-        message="A new verification link was sent to your inbox."
-        highlight={email}
+      <AppModal visible={showResentModal} onClose={() => setShowResentModal(false)}
+        icon="checkmark-circle" title="Verification Sent!"
+        message="A new verification link was sent to your inbox." highlight={email}
         buttons={[{ label: 'Got It', onPress: () => setShowResentModal(false) }]}
       />
-
-      <AppModal
-        visible={showForgotSentModal}
-        onClose={() => setShowForgotSentModal(false)}
-        icon="lock-open-outline"
-        title="Reset Link Sent!"
-        message="Check your inbox for a password reset link."
-        highlight={email}
+      <AppModal visible={showForgotSentModal} onClose={() => setShowForgotSentModal(false)}
+        icon="lock-open-outline" title="Reset Link Sent!"
+        message="Check your inbox for a password reset link." highlight={email}
         buttons={[{ label: 'Got It', onPress: () => setShowForgotSentModal(false) }]}
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -205,17 +168,13 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border,
       borderRadius: 12, marginBottom: 8,
     },
-    passwordInput: {
-      flex: 1, padding: 14, fontSize: 15, color: colors.textPrimary,
-    },
+    passwordInput: { flex: 1, padding: 14, fontSize: 15, color: colors.textPrimary },
     eyeButton: { padding: 14 },
     forgotContainer: { alignItems: 'flex-end', marginBottom: 10 },
     forgotText: { color: colors.primary, fontSize: 13, fontWeight: '600' },
     button: {
-      backgroundColor: colors.primary, borderRadius: 12,
-      padding: 16, alignItems: 'center', marginTop: 10,
-      shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.35, shadowRadius: 8, elevation: 4,
+      backgroundColor: colors.primary, borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 10,
+      shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 8, elevation: 4,
     },
     buttonDisabled: { opacity: 0.6 },
     buttonText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
