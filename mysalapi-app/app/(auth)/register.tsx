@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 import AppModal from '../../components/AppModal';
+import { sendConfirmationEmail } from '../../lib/api';
 
 export default function RegisterScreen() {
   const [fullName, setFullName] = useState('');
@@ -54,6 +55,7 @@ export default function RegisterScreen() {
     }
 
     setLoading(true);
+    // Register with Supabase — disable its own email so we send via Brevo
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -63,26 +65,30 @@ export default function RegisterScreen() {
       },
     });
     setLoading(false);
+
     if (error) {
-      // If the error is about sending the confirmation email,
-      // the account was still created — show success instead
+      // If the only failure is the email send (Supabase SMTP broken),
+      // the account was still created — send confirmation via Laravel
       const isEmailSendError =
-        error.message.toLowerCase().includes('sending confirmation') ||
-        error.message.toLowerCase().includes('sending email') ||
+        error.message.toLowerCase().includes('sending') ||
         error.message.toLowerCase().includes('smtp') ||
         error.message.toLowerCase().includes('email') ||
         error.status === 500;
 
       if (isEmailSendError) {
-        // Account was created, email just failed to send
+        // Send confirmation via Laravel + Brevo
+        await sendConfirmationEmail({ email });
         setRegisteredEmail(email);
         setShowEmailModal(true);
       } else {
         Alert.alert('Registration Failed', error.message);
       }
     } else if (data.session) {
+      // Auto-confirmed (email confirmation disabled in Supabase)
       router.replace('/(tabs)');
     } else {
+      // Account created — send confirmation via Laravel + Brevo
+      await sendConfirmationEmail({ email });
       setRegisteredEmail(email);
       setShowEmailModal(true);
     }

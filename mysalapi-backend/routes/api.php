@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\EmailController;
 use App\Http\Controllers\BudgetController;
+use App\Http\Controllers\AuthController;
 
 /*
 |--------------------------------------------------------------------------
@@ -30,3 +31,9 @@ Route::prefix('budget')->group(function () {
 
 // Cron endpoint (called by scheduler or external cron)
 Route::post('/cron/daily', [BudgetController::class, 'runDailyChecks']);
+
+// Auth emails via Brevo (bypasses Supabase's broken SMTP)
+Route::prefix('auth')->group(function () {
+    Route::post('/send-password-reset', [AuthController::class, 'sendPasswordReset']);
+    Route::post('/send-confirmation', [AuthController::class, 'sendConfirmationEmail']);
+});

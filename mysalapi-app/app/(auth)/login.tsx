@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 import AppModal from '../../components/AppModal';
+import { sendPasswordReset } from '../../lib/api';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -58,11 +59,9 @@ export default function LoginScreen() {
 
   const handleForgotPassword = async () => {
     if (!email) { Alert.alert('Enter Email', 'Please enter your email address first, then tap Forgot Password.'); return; }
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://krizxei.github.io/MySalapiMobile/reset-password.html',
-    });
-    if (error) { Alert.alert('Error', error.message); }
-    else { setShowForgotSentModal(true); }
+    // Fire and forget — show success immediately, email will arrive via Brevo
+    sendPasswordReset({ email });
+    setShowForgotSentModal(true);
   };
 
   const styles = makeStyles(colors);

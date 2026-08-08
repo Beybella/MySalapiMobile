@@ -74,3 +74,11 @@ export function sendShortfallAlert(params: {
 }) {
   return post('/email/shortfall', params);
 }
+
+export function sendPasswordReset(params: { email: string }) {
+  return post('/auth/send-password-reset', params);
+}
+
+export function sendConfirmationEmail(params: { email: string }) {
+  return post('/auth/send-confirmation', params);
+}
