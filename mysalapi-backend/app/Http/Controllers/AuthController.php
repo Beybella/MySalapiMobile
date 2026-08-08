@@ -118,21 +118,28 @@ class AuthController extends Controller
             return response()->json(['success' => false, 'error' => 'Service key not configured.'], 500);
         }
 
-        // Generate signup confirmation link
+        // Generate signup confirmation link using magiclink type
+        // (signup type may not work with Admin API when user just created)
         $response = Http::withHeaders([
             'apikey'        => $serviceKey,
             'Authorization' => "Bearer {$serviceKey}",
             'Content-Type'  => 'application/json',
         ])->post("{$supabaseUrl}/auth/v1/admin/generate_link", [
-            'type'    => 'signup',
+            'type'    => 'magiclink', // Changed from 'signup' to 'magiclink'
             'email'   => $data['email'],
             'options' => ['redirect_to' => $redirectTo],
         ]);
 
         if (!$response->successful()) {
+            \Illuminate\Support\Facades\Log::error('Confirmation link generation failed', [
+                'status' => $response->status(),
+                'body'   => $response->body(),
+                'email'  => $data['email'],
+            ]);
             return response()->json([
                 'success' => false,
                 'error'   => 'Could not generate confirmation link.',
+                'details' => $response->json(),
             ], 500);
         }
 

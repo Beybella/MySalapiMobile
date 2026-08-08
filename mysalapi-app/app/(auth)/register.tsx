@@ -56,21 +56,42 @@ export default function RegisterScreen() {
     }
 
     setLoading(true);
+    
+    // Step 1: Create user in Supabase (with autoConfirm option to bypass Supabase email)
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName, phone } },
+      options: { 
+        data: { full_name: fullName, phone },
+        // Don't set emailRedirectTo here - we'll handle email ourselves
+      },
     });
-    setLoading(false);
 
-    if (error && !error.message.toLowerCase().includes('email') && !error.message.toLowerCase().includes('sending')) {
+    if (error && !error.message.toLowerCase().includes('email')) {
+      setLoading(false);
+      console.error('Registration error:', error);
       Alert.alert('Registration Failed', error.message);
       return;
     }
 
-    // Whether Supabase succeeded or had an email error — always send confirmation via Laravel+Brevo
+    // Step 2: Send confirmation email via Laravel + Brevo (same as reset password!)
+    console.log('[Register] User created, now sending confirmation email via Laravel...');
     const confirmResult = await sendConfirmationEmail({ email });
-    console.log('[Register] confirmation email result:', confirmResult);
+    setLoading(false);
+    
+    console.log('[Register] Confirmation email result:', confirmResult);
+
+    if (!confirmResult.success) {
+      // User is created but email failed - still show success with warning
+      Alert.alert(
+        'Account Created',
+        'Your account was created, but we had trouble sending the confirmation email. You can try logging in or request a new confirmation email.',
+        [{ text: 'OK', onPress: () => router.replace('/(auth)/login') }]
+      );
+      return;
+    }
+
+    // Success! Show the email modal
     setRegisteredEmail(email);
     setShowEmailModal(true);
   };
