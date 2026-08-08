@@ -17,6 +17,7 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showUnverifiedModal, setShowUnverifiedModal] = useState(false);
   const [showResentModal, setShowResentModal] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
   const [showForgotSentModal, setShowForgotSentModal] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const router = useRouter();
@@ -58,9 +59,23 @@ export default function LoginScreen() {
   };
 
   const handleForgotPassword = async () => {
-    if (!email) { Alert.alert('Enter Email', 'Please enter your email address first, then tap Forgot Password.'); return; }
-    // Fire and forget — show success immediately, email will arrive via Brevo
-    sendPasswordReset({ email });
+    if (!email) {
+      Alert.alert('Enter Email', 'Please enter your email address first, then tap Forgot Password.');
+      return;
+    }
+    setForgotLoading(true);
+    const result = await sendPasswordReset({ email });
+    setForgotLoading(false);
+    if (!result.success) {
+      if (result.error?.includes('No account found') || result.error?.includes('not found')) {
+        Alert.alert('Not Found', 'No MySalapi account exists with that email address.');
+      } else if (result.error?.includes('timed out') || result.error?.includes('server')) {
+        Alert.alert('Server Offline', 'Could not reach the server. Make sure the Laravel server is running on your PC.');
+      } else {
+        Alert.alert('Error', result.error ?? 'Could not send reset email.');
+      }
+      return;
+    }
     setShowForgotSentModal(true);
   };
 
@@ -102,8 +117,8 @@ export default function LoginScreen() {
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotContainer}>
-            <Text style={styles.forgotText}>Forgot Password?</Text>
+          <TouchableOpacity onPress={handleForgotPassword} style={styles.forgotContainer} disabled={forgotLoading}>
+            <Text style={styles.forgotText}>{forgotLoading ? 'Sending...' : 'Forgot Password?'}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity

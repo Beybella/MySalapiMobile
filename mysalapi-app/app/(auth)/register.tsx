@@ -55,43 +55,23 @@ export default function RegisterScreen() {
     }
 
     setLoading(true);
-    // Register with Supabase — disable its own email so we send via Brevo
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: { full_name: fullName, phone },
-        emailRedirectTo: 'https://krizxei.github.io/MySalapiMobile/email-confirmed.html',
-      },
+      options: { data: { full_name: fullName, phone } },
     });
     setLoading(false);
 
-    if (error) {
-      // If the only failure is the email send (Supabase SMTP broken),
-      // the account was still created — send confirmation via Laravel
-      const isEmailSendError =
-        error.message.toLowerCase().includes('sending') ||
-        error.message.toLowerCase().includes('smtp') ||
-        error.message.toLowerCase().includes('email') ||
-        error.status === 500;
-
-      if (isEmailSendError) {
-        // Send confirmation via Laravel + Brevo
-        await sendConfirmationEmail({ email });
-        setRegisteredEmail(email);
-        setShowEmailModal(true);
-      } else {
-        Alert.alert('Registration Failed', error.message);
-      }
-    } else if (data.session) {
-      // Auto-confirmed (email confirmation disabled in Supabase)
-      router.replace('/(tabs)');
-    } else {
-      // Account created — send confirmation via Laravel + Brevo
-      await sendConfirmationEmail({ email });
-      setRegisteredEmail(email);
-      setShowEmailModal(true);
+    if (error && !error.message.toLowerCase().includes('email') && !error.message.toLowerCase().includes('sending')) {
+      Alert.alert('Registration Failed', error.message);
+      return;
     }
+
+    // Whether Supabase succeeded or had an email error — always send confirmation via Laravel+Brevo
+    const confirmResult = await sendConfirmationEmail({ email });
+    console.log('[Register] confirmation email result:', confirmResult);
+    setRegisteredEmail(email);
+    setShowEmailModal(true);
   };
 
   const showTerms = () => {

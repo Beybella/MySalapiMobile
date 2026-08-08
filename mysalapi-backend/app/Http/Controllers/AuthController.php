@@ -42,8 +42,19 @@ class AuthController extends Controller
         ]);
 
         if (!$response->successful()) {
+            $errorCode = $response->json('error_code') ?? '';
+            $status    = $response->status();
+
+            if ($status === 404 || $errorCode === 'user_not_found') {
+                return response()->json([
+                    'success' => false,
+                    'error'   => 'No account found with that email address.',
+                    'code'    => 'user_not_found',
+                ], 404);
+            }
+
             \Illuminate\Support\Facades\Log::error('Password reset link generation failed', [
-                'status' => $response->status(),
+                'status' => $status,
                 'body'   => $response->body(),
             ]);
             return response()->json([
@@ -54,6 +65,18 @@ class AuthController extends Controller
 
         $actionLink = $response->json('action_link');
 
+        \Illuminate\Support\Facades\Log::info('Password reset link response', [
+            'status'      => $response->status(),
+            'action_link' => $actionLink,
+            'body_keys'   => array_keys($response->json() ?? []),
+        ]);
+
+        if (!$actionLink) {
+            // Try alternate key name
+            $actionLink = $response->json('data.action_link')
+                ?? $response->json('properties.action_link');
+        }
+
         if (!$actionLink) {
             return response()->json([
                 'success' => false,
@@ -61,7 +84,14 @@ class AuthController extends Controller
             ], 500);
         }
 
-        // Send the reset link via Brevo
+        // Force the redirect_to to our GitHub Pages reset page,
+        // overriding whatever Supabase stored in URL Configuration
+        $resetPage   = 'https://krizxei.github.io/MySalapiMobile/reset-password.html';
+        $actionLink  = preg_replace(
+            '/redirect_to=[^&]+/',
+            'redirect_to=' . urlencode($resetPage),
+            $actionLink
+        );
         $email   = $data['email'];
         $subject = 'MySalapi — Reset Your Password';
         $html    = $this->buildResetEmailHtml($actionLink, $email);
@@ -110,6 +140,14 @@ class AuthController extends Controller
         if (!$actionLink) {
             return response()->json(['success' => false, 'error' => 'No action link returned.'], 500);
         }
+
+        // Force redirect_to to our confirmed page, overriding Supabase URL config
+        $confirmPage = 'https://krizxei.github.io/MySalapiMobile/email-confirmed.html';
+        $actionLink  = preg_replace(
+            '/redirect_to=[^&]+/',
+            'redirect_to=' . urlencode($confirmPage),
+            $actionLink
+        );
 
         $html   = $this->buildConfirmationEmailHtml($actionLink, $data['email']);
         $result = $this->brevo->send($data['email'], 'MySalapi — Confirm Your Email', $html);
