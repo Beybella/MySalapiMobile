@@ -2060,9 +2060,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       borderColor: colors.borderLight || colors.border,
     },
     billUrgent: { 
-      borderLeftWidth: 4, 
-      borderLeftColor: colors.error,
-      backgroundColor: colors.error + '05',
+      backgroundColor: colors.error + '18',
     },
     billHeader: { 
       flexDirection: 'row', 
@@ -2858,9 +2856,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       elevation: 3,
     },
     limitCardOver: {
-      borderLeftWidth: 4,
-      borderLeftColor: colors.error,
-      backgroundColor: colors.error + '05',
+      backgroundColor: colors.error + '18',
     },
     limitCardTop: {
       flexDirection: 'row',

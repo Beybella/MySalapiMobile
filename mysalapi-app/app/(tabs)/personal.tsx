@@ -737,9 +737,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       borderColor: colors.borderLight || colors.border,
     },
     itemOverdue: { 
-      borderLeftWidth: 3, 
-      borderLeftColor: colors.error,
-      backgroundColor: colors.error + '03',
+      backgroundColor: colors.error + '18',
     },
     itemContentRow: {
       flexDirection: 'row',

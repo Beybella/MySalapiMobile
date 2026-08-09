@@ -423,9 +423,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       borderColor: colors.borderLight || colors.border,
     },
     loanOverdue: { 
-      borderLeftWidth: 3, 
-      borderLeftColor: colors.error,
-      backgroundColor: colors.error + '03',
+      backgroundColor: colors.error + '18',
     },
     loanHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
     loanName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, letterSpacing: 0.2, marginBottom: 2 },
