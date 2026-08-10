@@ -149,7 +149,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <HomeHeader userName={userName} onSignOut={handleSignOut} />
+        <HomeHeader userName={userName} />
 
         {/* Monthly Stats */}
         <StatsCard

@@ -1,6 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { format } from 'date-fns';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -9,7 +8,7 @@ interface Props {
   onSignOut: () => void;
 }
 
-export default function HomeHeader({ userName, onSignOut }: Props) {
+export default function HomeHeader({ userName }: Props) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
 
@@ -22,9 +21,11 @@ export default function HomeHeader({ userName, onSignOut }: Props) {
           <Text style={styles.currentDate}>{format(new Date(), 'EEEE, d MMMM, yyyy')}</Text>
         </View>
         <View style={styles.headerRight}>
-          <TouchableOpacity onPress={onSignOut} style={styles.logoutIconBtn}>
-            <Ionicons name="log-out-outline" size={20} color="#ffffff" />
-          </TouchableOpacity>
+          <Image
+            source={require('../../assets/MySalapiLogo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
       </View>
     </View>
@@ -51,13 +52,10 @@ const makeStyles = (colors: any) => StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  logoutIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  logo: {
+    width: 60,
+    height: 60,
+    marginRight: 10,
   },
   greeting: {
     fontSize: 13,
