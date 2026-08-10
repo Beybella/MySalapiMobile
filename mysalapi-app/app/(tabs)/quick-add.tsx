@@ -1,8 +1,8 @@
 // Center + button quick-add: lets user pick Personal / Pautang / Ambagan then fills the form
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  ScrollView, KeyboardAvoidingView, Platform, Modal, Alert,
+  ScrollView, KeyboardAvoidingView, Platform, Modal,
 } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,9 +10,10 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import DateInput from '../../components/DateInput';
-
-const EXP_CATEGORIES = ['Food', 'Transport', 'Utilities', 'Health', 'Entertainment', 'Shopping', 'Education', 'Others'];
-const PAYMENT_METHODS = ['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'];
+import ResultAlert from '../../components/ResultAlert';
+import RecordSuccessAlert from '../../components/RecordSuccessAlert';
+import { EXP_CATEGORIES, BILL_CATEGORIES, PAYMENT_METHODS, formatCurrency } from '../../constants/recordConstants';
+import { useRecordSuccess } from '../../hooks/useRecordSuccess';
 
 type AddType = null | 'personal' | 'personal_expense' | 'personal_bill' | 'pautang' | 'ambagan';
 
@@ -24,6 +25,18 @@ export default function QuickAddScreen() {
   const [visible, setVisible] = useState(false);
   const [addType, setAddType] = useState<AddType>(null);
   const [loading, setLoading] = useState(false);
+  const [resultAlert, setResultAlert] = useState({ visible: false, type: 'success' as 'success' | 'error' | 'info', title: '', message: '' });
+  
+  // Success alert for new record additions
+  const { successAlert, showSuccess: baseShowSuccess, hideSuccess: baseHideSuccess } = useRecordSuccess();
+  
+  const showSuccess = baseShowSuccess;
+  
+  const hideSuccess = () => {
+    baseHideSuccess();
+    // Navigate to records after dismissing
+    setTimeout(handleClose, 300);
+  };
 
   // ── Personal ──────────────────────────────────────────────────────────────
   const [expTitle, setExpTitle] = useState('');
@@ -88,24 +101,36 @@ export default function QuickAddScreen() {
     setTimeout(() => router.push('/(tabs)/records'), 100);
   };
 
+  const showAlert = (type: 'success' | 'error' | 'info', title: string, message: string, callback?: () => void) => {
+    setResultAlert({ visible: true, type, title, message });
+    if (callback) {
+      setTimeout(callback, 500);
+    }
+  };
+
   const saveExpense = async () => {
-    if (!expTitle || !expAmount) { Alert.alert('Error', 'Title and amount are required.'); return; }
+    if (!expTitle || !expAmount) { showAlert('error', 'Error', 'Title and amount are required.'); return; }
     const amount = parseFloat(expAmount);
-    if (isNaN(amount) || amount <= 0) { Alert.alert('Error', 'Enter a valid amount.'); return; }
+    if (isNaN(amount) || amount <= 0) { showAlert('error', 'Error', 'Enter a valid amount.'); return; }
     setLoading(true);
     const { error } = await supabase.from('personal_expenses').insert({
       user_id: user!.id, title: expTitle, amount,
       category: expCategory, expense_date: expDate, description: expDesc,
     });
     setLoading(false);
-    if (error) { Alert.alert('Error', error.message); return; }
-    Alert.alert('Saved', `₱${amount.toFixed(2)} expense recorded.`, [{ text: 'OK', onPress: handleClose }]);
+    if (error) { showAlert('error', 'Error', error.message); return; }
+    showSuccess('expense', 'Expense Added!', 'Your expense has been recorded.', [
+      { label: 'Title', value: expTitle },
+      { label: 'Amount', value: formatCurrency(amount) },
+      { label: 'Category', value: expCategory },
+      { label: 'Date', value: expDate },
+    ]);
   };
 
   const saveBill = async () => {
-    if (!billTitle || !billAmount || !billDueDate) { Alert.alert('Error', 'All fields are required.'); return; }
+    if (!billTitle || !billAmount || !billDueDate) { showAlert('error', 'Error', 'All fields are required.'); return; }
     const amount = parseFloat(billAmount);
-    if (isNaN(amount) || amount <= 0) { Alert.alert('Error', 'Enter a valid amount.'); return; }
+    if (isNaN(amount) || amount <= 0) { showAlert('error', 'Error', 'Enter a valid amount.'); return; }
     setLoading(true);
     const { error } = await supabase.from('bill_reminders').insert({
       user_id: user!.id, title: billTitle, amount,
@@ -113,69 +138,89 @@ export default function QuickAddScreen() {
       category: billCategory,
     });
     setLoading(false);
-    if (error) { Alert.alert('Error', error.message); return; }
-    Alert.alert('Saved', 'Bill reminder added.', [{ text: 'OK', onPress: handleClose }]);
+    if (error) { showAlert('error', 'Error', error.message); return; }
+    showSuccess('bill', 'Bill Saved!', "We'll remind you before it's due.", [
+      { label: 'Bill', value: billTitle },
+      { label: 'Amount', value: formatCurrency(amount) },
+      { label: 'Due Date', value: billDueDate },
+      { label: 'Remind', value: `${billReminderDays} days before` },
+    ]);
   };
 
   const saveLoan = async () => {
-    if (!borrowerEmail || !loanAmount || !dueDate) { Alert.alert('Error', 'Borrower email, amount, and due date are required.'); return; }
+    if (!borrowerEmail || !loanAmount || !dueDate) { showAlert('error', 'Error', 'Borrower email, amount, and due date are required.'); return; }
     const amount = parseFloat(loanAmount);
-    if (isNaN(amount) || amount <= 0) { Alert.alert('Error', 'Enter a valid amount.'); return; }
+    if (isNaN(amount) || amount <= 0) { showAlert('error', 'Error', 'Enter a valid amount.'); return; }
     setLoading(true);
     const { data: borrower } = await supabase.from('users').select('id').eq('email', borrowerEmail.toLowerCase().trim()).single();
-    if (!borrower) { setLoading(false); Alert.alert('Error', 'No MySalapi user found with that email. They must register first.'); return; }
+    if (!borrower) { setLoading(false); showAlert('error', 'Error', 'No MySalapi user found with that email. They must register first.'); return; }
     const { error } = await supabase.from('loans').insert({
       lender_id: user!.id, borrower_id: borrower.id, amount, amount_remaining: amount,
       purpose: loanPurpose, loan_date: loanDate, due_date: dueDate,
       payment_method: loanPayMethod, payment_details: loanPayDetails, status: 'active',
     });
     setLoading(false);
-    if (error) { Alert.alert('Error', error.message); return; }
-    Alert.alert('Saved', 'Loan created successfully.', [{ text: 'OK', onPress: handleClose }]);
+    if (error) { showAlert('error', 'Error', error.message); return; }
+    showSuccess('loan', 'Loan Recorded!', 'The loan has been added to Pautang.', [
+      { label: 'Borrower', value: borrowerEmail },
+      { label: 'Amount', value: formatCurrency(amount) },
+      ...(loanPurpose ? [{ label: 'Purpose', value: loanPurpose }] : []),
+      { label: 'Due', value: dueDate },
+    ]);
   };
 
   const saveGroup = async () => {
-    if (!groupTitle || !groupAmount) { Alert.alert('Error', 'Title and amount are required.'); return; }
+    if (!groupTitle || !groupAmount) { showAlert('error', 'Error', 'Title and amount are required.'); return; }
     const amount = parseFloat(groupAmount);
-    if (isNaN(amount) || amount <= 0) { Alert.alert('Error', 'Enter a valid amount.'); return; }
+    if (isNaN(amount) || amount <= 0) { showAlert('error', 'Error', 'Enter a valid amount.'); return; }
     const emails = memberEmails.map(e => e.trim().toLowerCase()).filter(Boolean);
-    if (emails.length === 0) { Alert.alert('Error', 'Add at least one member email.'); return; }
+    if (emails.length === 0) { showAlert('error', 'Error', 'Add at least one member email.'); return; }
     setLoading(true);
     const { data: memberUsers } = await supabase.from('users').select('id, email').in('email', emails);
-    if (!memberUsers || memberUsers.length === 0) { setLoading(false); Alert.alert('Error', 'No valid MySalapi users found with those emails.'); return; }
+    if (!memberUsers || memberUsers.length === 0) { setLoading(false); showAlert('error', 'Error', 'No valid MySalapi users found with those emails.'); return; }
     const sharePerPerson = amount / (memberUsers.length + 1);
     const { data: group, error } = await supabase.from('group_expenses').insert({
       payer_id: user!.id, title: groupTitle, total_amount: amount,
       expense_date: groupDate, category: groupCategory, split_method: 'equal', status: 'active',
       payment_method: groupPayMethod, payment_details: groupPayDetails,
     }).select().single();
-    if (error || !group) { setLoading(false); Alert.alert('Error', error?.message || 'Failed to create group.'); return; }
+    if (error || !group) { setLoading(false); showAlert('error', 'Error', error?.message || 'Failed to create group.'); return; }
     await supabase.from('group_participants').insert(
       memberUsers.map((u: any) => ({ group_expense_id: group.id, participant_id: u.id, share_amount: sharePerPerson, is_paid: false }))
     );
     setLoading(false);
-    Alert.alert('Saved', 'Group expense created.', [{ text: 'OK', onPress: handleClose }]);
+    showSuccess('group', 'Group Created!', 'Ambagan group has been set up.', [
+      { label: 'Title', value: groupTitle },
+      { label: 'Total', value: formatCurrency(amount) },
+      { label: 'Each Pays', value: formatCurrency(sharePerPerson) },
+      { label: 'Members', value: `${memberUsers.length} person${memberUsers.length > 1 ? 's' : ''}` },
+    ]);
   };
 
   const saveCustomGroup = async () => {
-    if (!groupTitle) { Alert.alert('Error', 'Title is required.'); return; }
+    if (!groupTitle) { showAlert('error', 'Error', 'Title is required.'); return; }
     const validMembers = customMembers.filter(m => m.email.trim() && parseFloat(m.amount) > 0);
-    if (validMembers.length === 0) { Alert.alert('Error', 'Add at least one member with email and amount.'); return; }
+    if (validMembers.length === 0) { showAlert('error', 'Error', 'Add at least one member with email and amount.'); return; }
     setLoading(true);
     const emails = validMembers.map(m => m.email.trim().toLowerCase());
     const { data: memberUsers } = await supabase.from('users').select('id, email').in('email', emails);
-    if (!memberUsers || memberUsers.length === 0) { setLoading(false); Alert.alert('Error', 'No valid MySalapi users found with those emails.'); return; }
+    if (!memberUsers || memberUsers.length === 0) { setLoading(false); showAlert('error', 'Error', 'No valid MySalapi users found with those emails.'); return; }
     const totalAmt = validMembers.reduce((s, m) => s + parseFloat(m.amount), 0);
     const { data: group, error } = await supabase.from('group_expenses').insert({
       payer_id: user!.id, title: groupTitle, total_amount: totalAmt,
       expense_date: groupDate, category: groupCategory, split_method: 'custom', status: 'active',
       payment_method: groupPayMethod, payment_details: groupPayDetails,
     }).select().single();
-    if (error || !group) { setLoading(false); Alert.alert('Error', error?.message || 'Failed to create group.'); return; }
+    if (error || !group) { setLoading(false); showAlert('error', 'Error', error?.message || 'Failed to create group.'); return; }
     const rows = validMembers.map(m => { const found = memberUsers.find((u: any) => u.email === m.email.trim().toLowerCase()); return found ? { group_expense_id: group.id, participant_id: found.id, share_amount: parseFloat(m.amount), is_paid: false } : null; }).filter(Boolean);
     if (rows.length > 0) await supabase.from('group_participants').insert(rows);
     setLoading(false);
-    Alert.alert('Saved', 'Group expense created.', [{ text: 'OK', onPress: handleClose }]);
+    showSuccess('group', 'Group Created!', 'Ambagan group has been set up.', [
+      { label: 'Title', value: groupTitle },
+      { label: 'Total', value: formatCurrency(totalAmt) },
+      { label: 'Split', value: 'Custom' },
+      { label: 'Members', value: `${rows.length} person${rows.length > 1 ? 's' : ''}` },
+    ]);
   };
 
   const styles = makeStyles(colors);
@@ -291,7 +336,7 @@ export default function QuickAddScreen() {
                 <Text style={styles.fieldLabel}>Category</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {['Housing', 'Utilities', 'Transportation', 'Food', 'Healthcare', 'Entertainment', 'Insurance', 'Education', 'Subscriptions', 'Other'].map(c => (
+                    {BILL_CATEGORIES.map(c => (
                       <TouchableOpacity key={c} style={[styles.chip, billCategory === c && { backgroundColor: colors.primary, borderColor: colors.primary }]} onPress={() => setBillCategory(c)}>
                         <Text style={[styles.chipText, billCategory === c && { color: '#fff', fontWeight: '700' }]}>{c}</Text>
                       </TouchableOpacity>
@@ -472,6 +517,25 @@ export default function QuickAddScreen() {
 
         </View>
       </KeyboardAvoidingView>
+
+      {/* Result Alert Modal */}
+      <ResultAlert
+        visible={resultAlert.visible}
+        type={resultAlert.type as 'success' | 'error' | 'info'}
+        title={resultAlert.title}
+        message={resultAlert.message}
+        onButtonPress={() => setResultAlert({ ...resultAlert, visible: false })}
+      />
+
+      {/* Success Alert for new records */}
+      <RecordSuccessAlert
+        visible={successAlert.visible}
+        type={successAlert.type}
+        title={successAlert.title}
+        subtitle={successAlert.subtitle}
+        details={successAlert.details}
+        onDismiss={hideSuccess}
+      />
     </Modal>
   );
 }

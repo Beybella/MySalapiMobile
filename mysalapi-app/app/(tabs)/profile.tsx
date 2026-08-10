@@ -180,7 +180,7 @@ const handleSignOut = () => {
   ];
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.avatar}>
@@ -337,8 +337,6 @@ const handleSignOut = () => {
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
 
-      <View style={{ height: 40 }} />
-
       {/* ── Change PIN Modal ── */}
       <DraggableModal visible={showChangePinModal} onClose={() => setShowChangePinModal(false)}>
         <Text style={styles.modalTitle}>
@@ -475,6 +473,7 @@ const handleSignOut = () => {
 const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext').useTheme>['colors']) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: colors.background },
+    scrollContent: { paddingBottom: 100 },
     header: {
       backgroundColor: colors.primary,
       alignItems: 'center',

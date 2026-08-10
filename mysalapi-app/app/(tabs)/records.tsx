@@ -4,22 +4,21 @@ import {
   Modal, TextInput, Alert, RefreshControl, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { format, isPast } from 'date-fns';
 import { sendSingil } from '../../lib/api';
+import { EXP_CATEGORIES, BILL_CATEGORIES, PAYMENT_METHODS, FUND_TYPE_LABELS, formatCurrency } from '../../constants/recordConstants';
 import DateInput from '../../components/DateInput';
 import AppModal from '../../components/AppModal';
 import DraggableModal from '../../components/DraggableModal';
+import ToastNotification from '../../components/ToastNotification';
+import RecordSuccessAlert from '../../components/RecordSuccessAlert';
+import { consumePendingRecordsNav } from '../../lib/navigationStore';
+import { useRecordSuccess } from '../../hooks/useRecordSuccess';
 
-const EXP_CATEGORIES = ['Food', 'Transport', 'Utilities', 'Health', 'Entertainment', 'Shopping', 'Education', 'Others'];
-const BILL_CATEGORIES = ['Housing', 'Utilities', 'Transportation', 'Food', 'Healthcare', 'Entertainment', 'Insurance', 'Education', 'Subscriptions', 'Other'];
-const PAYMENT_METHODS = ['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'];
-const FUND_TYPE_LABELS: Record<string, string> = {
-  credit_card: 'Credit Card', savings_account: 'Savings Account', cash: 'Cash on Hand',
-};
 interface CustomMember { email: string; amount: string; }
 type MainTab = 'personal' | 'pautang' | 'ambagan';
 
@@ -29,8 +28,35 @@ export default function RecordsScreen() {
   const router = useRouter();
   const [mainTab, setMainTab] = useState<MainTab>('personal');
 
+  // ─── Toast notification ───────────────────────────────────────────────────
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'info'>('success');
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    setToastMessage(message);
+    setToastType(type);
+    setToastVisible(true);
+  };
+
+  // ─── Success alert (shown on new record adds) ─────────────────────────────
+  const { successAlert, showSuccess, hideSuccess } = useRecordSuccess();
+
   // ─── PERSONAL state ───────────────────────────────────────────────────────
   const [personalSub, setPersonalSub] = useState<'expenses' | 'bills'>('expenses');
+
+  // Read pending navigation intent every time this screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      const nav = consumePendingRecordsNav();
+      if (nav) {
+        if (nav.tab) setMainTab(nav.tab);
+        if (nav.sub) {
+          if (nav.tab === 'personal') setPersonalSub(nav.sub as 'expenses' | 'bills');
+          if (nav.tab === 'pautang') setPautangSub(nav.sub as 'given' | 'owed');
+        }
+      }
+    }, [])
+  );
   const [expenses, setExpenses] = useState<any[]>([]);
   const [bills, setBills] = useState<any[]>([]);
   const [fundSources, setFundSources] = useState<any[]>([]);
@@ -79,11 +105,20 @@ export default function RecordsScreen() {
     if (editingExpense) {
       const { error } = await supabase.from('personal_expenses').update({ title: expTitle, amount, category: expCategory, expense_date: expDate, description: expDesc }).eq('id', editingExpense.id);
       if (error) { errPersonal(error.message); return; }
+      setShowExpenseModal(false); showToast('Expense updated');
     } else {
       const { error } = await supabase.from('personal_expenses').insert({ user_id: user!.id, title: expTitle, amount, category: expCategory, expense_date: expDate, description: expDesc });
       if (error) { errPersonal(error.message); return; }
+      setShowExpenseModal(false);
+      showSuccess('expense', 'Expense Added!', 'Your expense has been recorded.', [
+        { label: 'Title', value: expTitle },
+        { label: 'Amount', value: formatCurrency(amount) },
+        { label: 'Category', value: expCategory },
+        { label: 'Date', value: expDate },
+      ]);
     }
-    setShowExpenseModal(false); loadPersonalData();
+    // Delay data reload to avoid re-render race with success alert
+    setTimeout(() => loadPersonalData(), 100);
   };
   const deleteExpense = (exp: any) => { setDeleteTarget({ type: 'expense', item: exp }); setShowDeleteModal(true); };
   const openAddBill = () => { setEditingBill(null); setBillTitle(''); setBillAmount(''); setBillDueDate(''); setBillReminderDays('3'); setBillCategory('Other'); setShowBillModal(true); };
@@ -93,13 +128,21 @@ export default function RecordsScreen() {
     const amount = parseFloat(billAmount);
     if (isNaN(amount) || amount <= 0) { errPersonal('Enter a valid amount.'); return; }
     if (editingBill) {
-      const { error } = await supabase.from('bill_reminders').update({ title: billTitle, amount, due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3, category: billCategory }).eq('id', editingBill.id);
+      const { error } = await supabase.from('bill_reminders').update({ title: billTitle, amount, due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3 }).eq('id', editingBill.id);
       if (error) { errPersonal(error.message); return; }
+      setShowBillModal(false); showToast('Bill reminder updated');
     } else {
-      const { error } = await supabase.from('bill_reminders').insert({ user_id: user!.id, title: billTitle, amount, due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3, category: billCategory });
+      const { error } = await supabase.from('bill_reminders').insert({ user_id: user!.id, title: billTitle, amount, due_date: billDueDate, reminder_days_before: parseInt(billReminderDays) || 3 });
       if (error) { errPersonal(error.message); return; }
+      setShowBillModal(false);
+      showSuccess('bill', 'Bill Saved!', "We'll remind you before it's due.", [
+        { label: 'Bill', value: billTitle },
+        { label: 'Amount', value: formatCurrency(amount) },
+        { label: 'Due Date', value: billDueDate },
+        { label: 'Remind', value: `${billReminderDays} days before` },
+      ]);
     }
-    setShowBillModal(false); loadPersonalData();
+    setTimeout(() => loadPersonalData(), 100);
   };
   const deleteBill = (bill: any) => { setDeleteTarget({ type: 'bill', item: bill }); setShowDeleteModal(true); };
   const confirmDelete = async () => {
@@ -121,11 +164,12 @@ export default function RecordsScreen() {
         else await supabase.from('fund_sources').update({ initial_balance: Math.max(0, Number(fund.initial_balance) - amt) }).eq('id', fund.id);
       }
     }
-    setShowPayModal(false); setPayingBill(null); setSelectedFundId(null); loadPersonalData();
+    setShowPayModal(false); setPayingBill(null); setSelectedFundId(null); showToast('Bill marked as paid'); loadPersonalData();
   };
 
   // ─── PAUTANG state ────────────────────────────────────────────────────────
   const [pautangSub, setPautangSub] = useState<'given' | 'owed'>('given');
+  const [pautangFilter, setPautangFilter] = useState<'unsettled' | 'settled'>('unsettled');
   const [loansGiven, setLoansGiven] = useState<any[]>([]);
   const [loansOwed, setLoansOwed] = useState<any[]>([]);
   const [pautangRefreshing, setPautangRefreshing] = useState(false);
@@ -156,7 +200,8 @@ export default function RecordsScreen() {
     if (!user) return;
     const { data: given } = await supabase.from('loans').select('*, borrower:borrower_id(full_name, email)').eq('lender_id', user.id).order('created_at', { ascending: false });
     const { data: owed } = await supabase.from('loans').select('*, lender:lender_id(full_name, email)').eq('borrower_id', user.id).order('created_at', { ascending: false });
-    setLoansGiven(given || []); setLoansOwed(owed || []);
+    setLoansGiven(given || []); 
+    setLoansOwed(owed || []);
   };
   useEffect(() => { if (mainTab === 'pautang') loadPautangData(); }, [user, mainTab]);
 
@@ -169,7 +214,13 @@ export default function RecordsScreen() {
     const { error } = await supabase.from('loans').insert({ lender_id: user!.id, borrower_id: borrower.id, amount, amount_remaining: amount, purpose: loanPurpose, loan_date: loanDate, due_date: dueDate, payment_method: loanPayMethod, payment_details: loanPayDetails, status: 'active' });
     if (error) { errPautang(error.message); return; }
     setShowAddLoan(false); setBorrowerEmail(''); setLoanAmount(''); setLoanPurpose(''); setDueDate(''); setLoanPayDetails('');
-    loadPautangData();
+    showSuccess('loan', 'Loan Recorded!', 'The loan has been added to Pautang.', [
+      { label: 'Borrower', value: borrowerEmail },
+      { label: 'Amount', value: formatCurrency(amount) },
+      ...(loanPurpose ? [{ label: 'Purpose', value: loanPurpose }] : []),
+      { label: 'Due', value: dueDate },
+    ]);
+    setTimeout(() => loadPautangData(), 100);
   };
   const recordPayment = async () => {
     if (!payAmount || !selectedLoan) return;
@@ -180,7 +231,14 @@ export default function RecordsScreen() {
     const newStatus = newRemaining <= 0 ? 'paid' : 'partial';
     await supabase.from('loan_payments').insert({ loan_id: selectedLoan.id, amount, payment_date: payDate, payment_method: payMethod, recorded_by: user!.id });
     await supabase.from('loans').update({ amount_remaining: newRemaining, status: newStatus }).eq('id', selectedLoan.id);
-    setShowRecordPayment(false); setPayAmount(''); setSelectedLoan(null); loadPautangData();
+    setShowRecordPayment(false); setPayAmount(''); setSelectedLoan(null);
+    showSuccess('payment', 'Payment Recorded!', newRemaining <= 0 ? 'Loan fully settled.' : 'Payment has been applied to the loan.', [
+      { label: 'Amount Paid', value: formatCurrency(amount) },
+      { label: 'Remaining', value: formatCurrency(newRemaining) },
+      { label: 'Method', value: payMethod },
+      { label: 'Status', value: newRemaining <= 0 ? 'Fully Paid' : 'Partial' },
+    ]);
+    setTimeout(() => loadPautangData(), 100);
   };
   const sendSingilEmail = (loan: any) => { setSingilTarget(loan); setShowSingilConfirm(true); };
   const confirmSendSingil = async () => {
@@ -237,7 +295,14 @@ export default function RecordsScreen() {
     const { data: group, error } = await supabase.from('group_expenses').insert({ payer_id: user!.id, title: groupTitle, total_amount: amount, expense_date: groupDate, category: groupCategory, split_method: 'equal', status: 'active', payment_method: groupPayMethod, payment_details: groupPayDetails }).select().single();
     if (error || !group) { Alert.alert('Error', error?.message || 'Failed to create group.'); return; }
     await supabase.from('group_participants').insert(memberUsers.map((u: any) => ({ group_expense_id: group.id, participant_id: u.id, share_amount: sharePerPerson, is_paid: false })));
-    setShowCreate(false); resetGroupForm(); loadGroupsData();
+    setShowCreate(false); resetGroupForm();
+    showSuccess('group', 'Group Created!', 'Ambagan group has been set up.', [
+      { label: 'Title', value: groupTitle },
+      { label: 'Total', value: formatCurrency(amount) },
+      { label: 'Each Pays', value: formatCurrency(sharePerPerson) },
+      { label: 'Members', value: `${memberUsers.length} person${memberUsers.length > 1 ? 's' : ''}` },
+    ]);
+    setTimeout(() => loadGroupsData(), 100);
   };
   const createCustomGroup = async () => {
     if (!groupTitle) { Alert.alert('Error', 'Title is required.'); return; }
@@ -252,55 +317,116 @@ export default function RecordsScreen() {
     const rows = validMembers.map(m => { const found = memberUsers.find((u: any) => u.email === m.email.trim().toLowerCase()); return found ? { group_expense_id: group.id, participant_id: found.id, share_amount: parseFloat(m.amount), is_paid: false } : null; }).filter(Boolean);
     if (rows.length === 0) { Alert.alert('Error', 'None of the emails matched registered MySalapi users.'); await supabase.from('group_expenses').delete().eq('id', group.id); return; }
     await supabase.from('group_participants').insert(rows);
-    setShowCreate(false); resetGroupForm(); loadGroupsData();
+    setShowCreate(false); resetGroupForm();
+    showSuccess('group', 'Group Created!', 'Ambagan group has been set up.', [
+      { label: 'Title', value: groupTitle },
+      { label: 'Total', value: formatCurrency(totalAmt) },
+      { label: 'Split', value: 'Custom' },
+      { label: 'Members', value: `${rows.length} person${rows.length > 1 ? 's' : ''}` },
+    ]);
+    setTimeout(() => loadGroupsData(), 100);
   };
   const customTotal = customMembers.reduce((s, m) => { const n = parseFloat(m.amount); return s + (isNaN(n) ? 0 : n); }, 0);
 
-  const formatCurrency = (n: number) => `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const styles = makeStyles(colors);
 
-  // ─── loan card renderer (same as pautang.tsx) ─────────────────────────────
+  // ─── loan card renderer (clean borderless design) ─────────────────────────────
   const renderLoan = (loan: any, isGiven: boolean) => {
-    const isOverdue = loan.status !== 'paid' && loan.due_date && isPast(new Date(loan.due_date));
+    // Only show overdue status for borrowers (isGiven=false), not lenders
+    // Borrowers need to know they owe money that's past due; lenders just track unpaid loans
+    const isOverdue = !isGiven && loan.status !== 'paid' && loan.due_date && (() => {
+      const dueDateStr = loan.due_date; // Assume YYYY-MM-DD format
+      const today = new Date().toISOString().split('T')[0]; // Current date as YYYY-MM-DD
+      return dueDateStr < today; // String comparison works for YYYY-MM-DD format
+    })();
     const otherParty = isGiven ? loan.borrower : loan.lender;
+    // Convert error color with alpha to rgba format
+    const bgColor = isOverdue ? 'rgba(184, 92, 92, 0.21)' : colors.surface;
+    
     return (
-      <TouchableOpacity key={loan.id} style={[styles.loanCard, isOverdue && styles.loanOverdue]}
-        onPress={() => router.push({ pathname: '/loan-detail', params: { id: loan.id } })}>
-        <View style={styles.loanHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.loanName}>{otherParty?.full_name || otherParty?.email || 'Unknown'}</Text>
-            <Text style={styles.loanPurpose}>{loan.purpose || 'No purpose stated'}</Text>
+      <View key={loan.id} style={{ marginBottom: 10, overflow: 'hidden' }}>
+        <TouchableOpacity 
+          activeOpacity={0.7}
+          style={{
+            backgroundColor: bgColor,
+            borderRadius: 14,
+            padding: 14,
+            shadowColor: 'transparent',
+            shadowOffset: { width: 0, height: 0 },
+            shadowOpacity: 0,
+            shadowRadius: 0,
+            elevation: 0,
+          }}
+          onPress={() => router.push({ pathname: '/loan-detail', params: { id: loan.id } })}>
+          
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: colors.textPrimary, letterSpacing: 0.2, marginBottom: 2 }}>
+                {otherParty?.full_name || otherParty?.email || 'Unknown'}
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.textSecondary, fontWeight: '500' }}>
+                {loan.purpose || 'No purpose stated'}
+              </Text>
+            </View>
+            <View style={{ backgroundColor: loan.status === 'paid' ? colors.success + '25' : isOverdue ? colors.error + '25' : colors.warning + '25', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, overflow: 'hidden' }}>
+              <Text style={{ fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5, color: loan.status === 'paid' ? colors.success : isOverdue ? colors.error : colors.warning }}>
+                {loan.status === 'paid' ? 'Paid' : isOverdue ? 'Overdue' : 'Active'}
+              </Text>
+            </View>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: loan.status === 'paid' ? colors.success + '25' : isOverdue ? colors.error + '25' : colors.warning + '25' }]}>
-            <Text style={[styles.statusText, { color: loan.status === 'paid' ? colors.success : isOverdue ? colors.error : colors.warning }]}>
-              {loan.status === 'paid' ? 'Paid' : isOverdue ? 'Overdue' : 'Active'}
-            </Text>
+          
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, paddingTop: 10 }}>
+            <View>
+              <Text style={{ fontSize: 10, color: colors.textSecondary, marginBottom: 4, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Original</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary, letterSpacing: 0.2 }}>{formatCurrency(loan.amount)}</Text>
+            </View>
+            <View>
+              <Text style={{ fontSize: 10, color: colors.textSecondary, marginBottom: 4, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Remaining</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: loan.status === 'paid' ? colors.success : colors.error, letterSpacing: 0.2 }}>
+                {formatCurrency(loan.amount_remaining)}
+              </Text>
+            </View>
+            <View>
+              <Text style={{ fontSize: 10, color: colors.textSecondary, marginBottom: 4, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Due</Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: isOverdue ? colors.error : colors.textPrimary, letterSpacing: 0.2 }}>
+                {loan.due_date ? format(new Date(loan.due_date), 'MMM d') : 'N/A'}
+              </Text>
+            </View>
           </View>
-        </View>
-        <View style={styles.loanAmounts}>
-          <View><Text style={styles.amountLabel}>Original</Text><Text style={styles.amountValue}>{formatCurrency(loan.amount)}</Text></View>
-          <View><Text style={styles.amountLabel}>Remaining</Text><Text style={[styles.amountValue, { color: loan.status === 'paid' ? colors.success : colors.error }]}>{formatCurrency(loan.amount_remaining)}</Text></View>
-          <View><Text style={styles.amountLabel}>Due</Text><Text style={[styles.amountValue, isOverdue && { color: colors.error }]}>{loan.due_date ? format(new Date(loan.due_date), 'MMM d') : 'N/A'}</Text></View>
-        </View>
-        {loan.status !== 'paid' && isGiven && (
-          <View style={styles.loanActions}>
-            <TouchableOpacity style={styles.actionBtnSolid} onPress={() => { setSelectedLoan(loan); setShowRecordPayment(true); }}>
-              <Ionicons name="cash-outline" size={15} color="#fff" />
-              <Text style={styles.actionBtnSolidText}>Record Payment</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.actionBtn, sendingSingil === loan.id && { opacity: 0.5 }]}
-              onPress={() => sendingSingil === loan.id ? null : sendSingilEmail(loan)} disabled={sendingSingil === loan.id}>
-              <Ionicons name="mail-outline" size={15} color={colors.primary} />
-              <Text style={styles.actionBtnText}>{sendingSingil === loan.id ? 'Sending...' : 'Singil'}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </TouchableOpacity>
+          
+          {loan.status !== 'paid' && isGiven && (
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity 
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 25, flex: 1 }}
+                onPress={() => { setSelectedLoan(loan); setShowRecordPayment(true); }}>
+                <Ionicons name="cash-outline" size={18} color="#fff" />
+                <Text style={{ fontSize: 14, color: '#fff', fontWeight: '700' }}>Record Payment</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: colors.primary + '15', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 25, flex: 1, opacity: sendingSingil === loan.id ? 0.5 : 1 }}
+                onPress={() => sendingSingil === loan.id ? null : sendSingilEmail(loan)} 
+                disabled={sendingSingil === loan.id}>
+                <Ionicons name="mail-outline" size={18} color={colors.primary} />
+                <Text style={{ fontSize: 14, color: colors.primary, fontWeight: '700' }}>
+                  {sendingSingil === loan.id ? 'Sending...' : 'Singil'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
     );
   };
 
   return (
     <View style={styles.container}>
+      {/* Toast */}
+      <ToastNotification
+        visible={toastVisible}
+        message={toastMessage}
+        type={toastType}
+        onHide={() => setToastVisible(false)}
+      />
       {/* ── Green header accent — straight cut like profile ── */}
       <View style={styles.greenHeader}>
         <Text style={styles.headerTitle}>Records</Text>
@@ -428,9 +554,49 @@ export default function RecordsScreen() {
           <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.listContent}
             refreshControl={<RefreshControl refreshing={pautangRefreshing} onRefresh={async () => { setPautangRefreshing(true); await loadPautangData(); setPautangRefreshing(false); }} tintColor={colors.primary} />}
             showsVerticalScrollIndicator={false}>
-            {pautangSub === 'given'
-              ? (loansGiven.length === 0 ? <View style={styles.emptyState}><Ionicons name="people-outline" size={44} color={colors.textLight} /><Text style={styles.emptyText}>No loans given yet.</Text></View> : loansGiven.map(l => renderLoan(l, true)))
-              : (loansOwed.length === 0 ? <View style={styles.emptyState}><Ionicons name="people-outline" size={44} color={colors.textLight} /><Text style={styles.emptyText}>You don't owe anyone.</Text></View> : loansOwed.map(l => renderLoan(l, false)))}
+            {pautangSub === 'given' ? (
+              <>
+                {loansGiven.length === 0 ? (
+                  <View style={styles.emptyState}><Ionicons name="people-outline" size={44} color={colors.textLight} /><Text style={styles.emptyText}>No loans given yet.</Text></View>
+                ) : (
+                  <>
+                    {loansGiven.filter(l => l.status !== 'paid').length > 0 && (
+                      <>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 12, marginLeft: 0 }}>Unsettled</Text>
+                        {loansGiven.filter(l => l.status !== 'paid').map(l => renderLoan(l, true))}
+                      </>
+                    )}
+                    {loansGiven.filter(l => l.status === 'paid').length > 0 && (
+                      <>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 12, marginTop: 16, marginLeft: 0 }}>Settled</Text>
+                        {loansGiven.filter(l => l.status === 'paid').map(l => renderLoan(l, true))}
+                      </>
+                    )}
+                  </>
+                )}
+              </>
+            ) : (
+              <>
+                {loansOwed.length === 0 ? (
+                  <View style={styles.emptyState}><Ionicons name="people-outline" size={44} color={colors.textLight} /><Text style={styles.emptyText}>You don't owe anyone.</Text></View>
+                ) : (
+                  <>
+                    {loansOwed.filter(l => l.status !== 'paid').length > 0 && (
+                      <>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 12, marginLeft: 0 }}>Unsettled</Text>
+                        {loansOwed.filter(l => l.status !== 'paid').map(l => renderLoan(l, false))}
+                      </>
+                    )}
+                    {loansOwed.filter(l => l.status === 'paid').length > 0 && (
+                      <>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 12, marginTop: 16, marginLeft: 0 }}>Settled</Text>
+                        {loansOwed.filter(l => l.status === 'paid').map(l => renderLoan(l, false))}
+                      </>
+                    )}
+                  </>
+                )}
+              </>
+            )}
             <View style={{ height: 100 }} />
           </ScrollView>
 
@@ -708,6 +874,16 @@ export default function RecordsScreen() {
         </ScrollView>
       </DraggableModal>
 
+      {/* ── Success Alert (renders last, on top of everything) ─────────────── */}
+      <RecordSuccessAlert
+        visible={successAlert.visible}
+        type={successAlert.type}
+        title={successAlert.title}
+        subtitle={successAlert.subtitle}
+        details={successAlert.details}
+        onDismiss={hideSuccess}
+      />
+
     </View>
   );
 }
@@ -761,8 +937,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       shadowOffset: { width: 0, height: 1 },
       shadowOpacity: 0.04,
       shadowRadius: 4,
-      borderWidth: 1,
-      borderColor: colors.borderLight || colors.border,
+      borderWidth: 0,
     },
     tabs: { flexDirection: 'row', gap: 3 },
     tab: {
@@ -789,11 +964,6 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       borderRadius: 14,
       padding: 14,
       marginBottom: 10,
-      elevation: 2,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
-      shadowRadius: 6,
     },
     badge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginBottom: 8 },
     badgeText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -803,11 +973,11 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     itemDesc: { fontSize: 11, color: colors.textLight, marginTop: 3, fontStyle: 'italic', lineHeight: 16 },
     itemAmount: { fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
     markPaidBtn: {
-      flexDirection: 'row', alignItems: 'center', gap: 4,
-      backgroundColor: colors.success, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+      flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+      backgroundColor: colors.success, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20,
       elevation: 3, shadowColor: colors.success, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4,
     },
-    markPaidBtnText: { fontSize: 11, color: '#fff', fontWeight: '700' },
+    markPaidBtnText: { fontSize: 12, color: '#fff', fontWeight: '700' },
 
     // ── pautang loan card ─────────────────────────────────────────────────────
     loanCard: {
@@ -820,12 +990,14 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.06,
       shadowRadius: 6,
+      borderWidth: 0,
+      borderColor: 'transparent',
     },
-    loanOverdue: { backgroundColor: colors.error + '18' },
+    loanOverdue: { backgroundColor: colors.error + '30', borderWidth: 0, borderColor: 'transparent' },
     loanHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
     loanName: { fontSize: 15, fontWeight: '700', color: colors.textPrimary, letterSpacing: 0.2, marginBottom: 2 },
     loanPurpose: { fontSize: 12, color: colors.textSecondary, fontWeight: '500' },
-    statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 0 },
     statusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
     loanAmounts: {
       flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12,
@@ -842,7 +1014,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     actionBtn: {
       flexDirection: 'row', alignItems: 'center', gap: 5,
       backgroundColor: colors.primary + '15', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 9,
-      borderWidth: 1, borderColor: colors.primary + '35',
+      borderWidth: 0,
     },
     actionBtnText: { fontSize: 12, color: colors.primary, fontWeight: '700' },
 
