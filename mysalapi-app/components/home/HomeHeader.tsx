@@ -5,7 +5,7 @@ import { useTheme } from '../../context/ThemeContext';
 
 interface Props {
   userName: string;
-  onSignOut: () => void;
+  onSignOut?: () => void;
 }
 
 export default function HomeHeader({ userName }: Props) {

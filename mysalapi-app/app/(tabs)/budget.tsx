@@ -461,6 +461,7 @@ export default function BudgetScreen() {
       <ScrollView 
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />} 
         style={styles.content}
+        contentContainerStyle={{ paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
       >
         {activeTab === 'overview' && (
@@ -1771,7 +1772,7 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     tabText: { fontSize: 13, color: colors.textLight, fontWeight: '600' },
     tabTextActive: { color: colors.budgetPlanner, fontWeight: '700' },
     
-    content: { flex: 1 },
+    content: { flex: 1, paddingBottom: 120 },
     overviewContainer: { paddingBottom: 20 },
     
     // Enhanced Summary Cards

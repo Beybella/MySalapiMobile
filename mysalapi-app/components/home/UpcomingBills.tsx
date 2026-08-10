@@ -127,7 +127,7 @@ export default function UpcomingBills({ bills, overdueBills }: Props) {
           highlight={formatCurrency(Number(selectedBill.amount))}
           buttons={[
             {
-              label: 'Record Payment',
+              label: 'Settle Bill',
               onPress: handleRecordPayment,
               variant: 'primary',
             },
