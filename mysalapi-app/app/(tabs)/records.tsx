@@ -13,11 +13,17 @@ import { sendSingil } from '../../lib/api';
 import { EXP_CATEGORIES, BILL_CATEGORIES, PAYMENT_METHODS, FUND_TYPE_LABELS, formatCurrency } from '../../constants/recordConstants';
 import DateInput from '../../components/DateInput';
 import AppModal from '../../components/AppModal';
+import UserOrContactPicker from '../../components/UserOrContactPicker';
 import DraggableModal from '../../components/DraggableModal';
 import ToastNotification from '../../components/ToastNotification';
 import RecordSuccessAlert from '../../components/RecordSuccessAlert';
 import { consumePendingRecordsNav } from '../../lib/navigationStore';
 import { useRecordSuccess } from '../../hooks/useRecordSuccess';
+import { useSearchFilter } from '../../hooks/useSearchFilter';
+import SearchBar from '../../components/SearchBar';
+import FilterModal from '../../components/FilterModal';
+import ResultCounter from '../../components/ResultCounter';
+import EmptyState from '../../components/EmptyState';
 
 interface CustomMember { email: string; amount: string; }
 type MainTab = 'personal' | 'pautang' | 'ambagan';
@@ -41,8 +47,60 @@ export default function RecordsScreen() {
   // ─── Success alert (shown on new record adds) ─────────────────────────────
   const { successAlert, showSuccess, hideSuccess } = useRecordSuccess();
 
+  // Helper function to offer saving participants as contacts
+  const offerSaveParticipantsAsContacts = async (memberUsers: any[]) => {
+    // Check which members are not already in contacts
+    const { data: existingContacts } = await supabase
+      .from('contacts')
+      .select('email')
+      .eq('user_id', user!.id)
+      .in('email', memberUsers.map(m => m.email.toLowerCase()));
+    
+    const existingEmails = new Set((existingContacts || []).map(c => c.email.toLowerCase()));
+    const newMembers = memberUsers.filter(m => !existingEmails.has(m.email.toLowerCase()));
+    
+    if (newMembers.length === 0) return; // All already in contacts
+    
+    const memberNames = newMembers.map(m => m.full_name || m.email).join(', ');
+    const message = newMembers.length === 1
+      ? `Would you like to save ${memberNames} to your contacts for quick access next time?`
+      : `Would you like to save these ${newMembers.length} members to your contacts for quick access next time?\n\n${memberNames}`;
+    
+    setTimeout(() => {
+      Alert.alert(
+        'Save to Contacts?',
+        message,
+        [
+          { text: 'No, Thanks', style: 'cancel' },
+          {
+            text: 'Save All',
+            onPress: async () => {
+              const contactsToAdd = newMembers.map(m => ({
+                user_id: user!.id,
+                email: m.email.toLowerCase(),
+                full_name: m.full_name || '',
+              }));
+              
+              const { error: contactError } = await supabase
+                .from('contacts')
+                .insert(contactsToAdd);
+              
+              if (contactError) {
+                console.error('Error saving contacts:', contactError);
+              } else {
+                const count = newMembers.length;
+                Alert.alert('Saved!', `${count} ${count === 1 ? 'contact' : 'contacts'} added successfully.`);
+              }
+            },
+          },
+        ]
+      );
+    }, 1000);
+  };
+
   // ─── PERSONAL state ───────────────────────────────────────────────────────
   const [personalSub, setPersonalSub] = useState<'expenses' | 'bills'>('expenses');
+  const [showPersonalFilterModal, setShowPersonalFilterModal] = useState(false);
 
   // Read pending navigation intent every time this screen comes into focus
   useFocusEffect(
@@ -173,6 +231,7 @@ export default function RecordsScreen() {
   const [loansGiven, setLoansGiven] = useState<any[]>([]);
   const [loansOwed, setLoansOwed] = useState<any[]>([]);
   const [pautangRefreshing, setPautangRefreshing] = useState(false);
+  const [showPautangFilterModal, setShowPautangFilterModal] = useState(false);
   const [showAddLoan, setShowAddLoan] = useState(false);
   const [showRecordPayment, setShowRecordPayment] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any>(null);
@@ -209,18 +268,74 @@ export default function RecordsScreen() {
     if (!borrowerEmail || !loanAmount || !dueDate) { errPautang('Borrower email, amount, and due date are required.'); return; }
     const amount = parseFloat(loanAmount);
     if (isNaN(amount) || amount <= 0) { errPautang('Enter a valid amount.'); return; }
-    const { data: borrower } = await supabase.from('users').select('id').eq('email', borrowerEmail.toLowerCase().trim()).single();
+    
+    // Get borrower info (including name for potential contact save)
+    const { data: borrower } = await supabase
+      .from('users')
+      .select('id, email, full_name')
+      .eq('email', borrowerEmail.toLowerCase().trim())
+      .single();
+    
     if (!borrower) { errPautang('No MySalapi user found with that email. They must register first.'); return; }
-    const { error } = await supabase.from('loans').insert({ lender_id: user!.id, borrower_id: borrower.id, amount, amount_remaining: amount, purpose: loanPurpose, loan_date: loanDate, due_date: dueDate, payment_method: loanPayMethod, payment_details: loanPayDetails, status: 'active' });
+    
+    const { error } = await supabase.from('loans').insert({ 
+      lender_id: user!.id, borrower_id: borrower.id, amount, amount_remaining: amount, 
+      purpose: loanPurpose, loan_date: loanDate, due_date: dueDate, 
+      payment_method: loanPayMethod, payment_details: loanPayDetails, status: 'active' 
+    });
+    
     if (error) { errPautang(error.message); return; }
-    setShowAddLoan(false); setBorrowerEmail(''); setLoanAmount(''); setLoanPurpose(''); setDueDate(''); setLoanPayDetails('');
+    
+    // Check if borrower is already in contacts
+    const { data: existingContact } = await supabase
+      .from('contacts')
+      .select('id')
+      .eq('user_id', user!.id)
+      .eq('email', borrower.email.toLowerCase())
+      .single();
+    
+    setShowAddLoan(false); 
+    setBorrowerEmail(''); setLoanAmount(''); setLoanPurpose(''); setDueDate(''); setLoanPayDetails('');
+    
     showSuccess('loan', 'Loan Recorded!', 'The loan has been added to Pautang.', [
       { label: 'Borrower', value: borrowerEmail },
       { label: 'Amount', value: formatCurrency(amount) },
       ...(loanPurpose ? [{ label: 'Purpose', value: loanPurpose }] : []),
       { label: 'Due', value: dueDate },
     ]);
+    
     setTimeout(() => loadPautangData(), 100);
+    
+    // If not in contacts, offer to save (after a brief delay so success message shows first)
+    if (!existingContact) {
+      setTimeout(() => {
+        Alert.alert(
+          'Save to Contacts?',
+          `Would you like to save ${borrower.full_name || borrower.email} to your contacts for quick access next time?`,
+          [
+            { text: 'No, Thanks', style: 'cancel' },
+            {
+              text: 'Save',
+              onPress: async () => {
+                const { error: contactError } = await supabase
+                  .from('contacts')
+                  .insert({
+                    user_id: user!.id,
+                    email: borrower.email.toLowerCase(),
+                    full_name: borrower.full_name || '',
+                  });
+                
+                if (contactError) {
+                  console.error('Error saving contact:', contactError);
+                } else {
+                  Alert.alert('Saved!', `${borrower.full_name || borrower.email} has been added to your contacts.`);
+                }
+              },
+            },
+          ]
+        );
+      }, 800);
+    }
   };
   const recordPayment = async () => {
     if (!payAmount || !selectedLoan) return;
@@ -258,6 +373,7 @@ export default function RecordsScreen() {
   const [groupCounts, setGroupCounts] = useState<Record<string, { paid: number; total: number }>>({});
   const [showCreate, setShowCreate] = useState(false);
   const [ambaganRefreshing, setAmbaganRefreshing] = useState(false);
+  const [showAmbaganFilterModal, setShowAmbaganFilterModal] = useState(false);
   const [groupTitle, setGroupTitle] = useState('');
   const [groupDate, setGroupDate] = useState(new Date().toISOString().split('T')[0]);
   const [groupCategory, setGroupCategory] = useState('Food');
@@ -303,6 +419,9 @@ export default function RecordsScreen() {
       { label: 'Members', value: `${memberUsers.length} person${memberUsers.length > 1 ? 's' : ''}` },
     ]);
     setTimeout(() => loadGroupsData(), 100);
+    
+    // Offer to save participants as contacts
+    offerSaveParticipantsAsContacts(memberUsers);
   };
   const createCustomGroup = async () => {
     if (!groupTitle) { Alert.alert('Error', 'Title is required.'); return; }
@@ -325,8 +444,133 @@ export default function RecordsScreen() {
       { label: 'Members', value: `${rows.length} person${rows.length > 1 ? 's' : ''}` },
     ]);
     setTimeout(() => loadGroupsData(), 100);
+    
+    // Offer to save participants as contacts
+    offerSaveParticipantsAsContacts(memberUsers);
   };
   const customTotal = customMembers.reduce((s, m) => { const n = parseFloat(m.amount); return s + (isNaN(n) ? 0 : n); }, 0);
+
+  // ─── SEARCH & FILTER for Personal Expenses ───────────────────────────────
+  const expensesWithData = expenses.map(exp => ({ ...exp, searchText: `${exp.title} ${exp.description || ''}` }));
+  const {
+    filters: expenseFilters,
+    filteredData: filteredExpenses,
+    hasActiveFilters: hasExpenseFilters,
+    totalItems: totalExpenses,
+    filteredCount: filteredExpenseCount,
+    updateFilter: updateExpenseFilter,
+    toggleCategory: toggleExpenseCategory,
+    clearFilters: clearExpenseFilters,
+  } = useSearchFilter({
+    data: expensesWithData,
+    searchFields: ['title' as any, 'description' as any, 'searchText' as any],
+    categoryField: 'category' as any,
+    dateField: 'expense_date' as any,
+    amountField: 'amount' as any,
+    nameField: 'title' as any,
+  });
+
+  // ─── SEARCH & FILTER for Bills ───────────────────────────────────────────
+  const billsWithStatus = bills.map(bill => ({
+    ...bill,
+    displayStatus: bill.is_paid ? 'paid' : 'unpaid',
+    searchText: `${bill.title} ${bill.category || ''}`,
+  }));
+  const {
+    filters: billFilters,
+    filteredData: filteredBills,
+    hasActiveFilters: hasBillFilters,
+    totalItems: totalBills,
+    filteredCount: filteredBillCount,
+    updateFilter: updateBillFilter,
+    toggleCategory: toggleBillCategory,
+    toggleStatus: toggleBillStatus,
+    clearFilters: clearBillFilters,
+  } = useSearchFilter({
+    data: billsWithStatus,
+    searchFields: ['title' as any, 'category' as any, 'searchText' as any],
+    categoryField: 'category' as any,
+    dateField: 'due_date' as any,
+    statusField: 'displayStatus' as any,
+    amountField: 'amount' as any,
+    nameField: 'title' as any,
+  });
+
+  const BILL_STATUSES = [
+    { value: 'paid', label: 'Paid', color: colors.success },
+    { value: 'unpaid', label: 'Unpaid', color: colors.warning },
+  ];
+
+  // ─── SEARCH & FILTER for Pautang Loans ───────────────────────────────────
+  const activeLoans = (pautangSub === 'given' ? loansGiven : loansOwed).map((loan) => {
+    const isOverdue = !pautangSub && loan.status !== 'paid' && loan.due_date && isPast(new Date(loan.due_date));
+    const otherParty = pautangSub === 'given' ? loan.borrower : loan.lender;
+    return {
+      ...loan,
+      displayStatus: isOverdue ? 'overdue' : loan.status,
+      searchText: `${otherParty?.full_name || ''} ${otherParty?.email || ''} ${loan.purpose || ''}`,
+    };
+  });
+
+  const {
+    filters: loanFilters,
+    filteredData: filteredLoans,
+    hasActiveFilters: hasLoanFilters,
+    totalItems: totalLoans,
+    filteredCount: filteredLoanCount,
+    updateFilter: updateLoanFilter,
+    toggleCategory: toggleLoanCategory,
+    toggleStatus: toggleLoanStatus,
+    clearFilters: clearLoanFilters,
+  } = useSearchFilter({
+    data: activeLoans,
+    searchFields: pautangSub === 'given'
+      ? ['borrower.full_name' as any, 'borrower.email' as any, 'purpose' as any, 'searchText' as any]
+      : ['lender.full_name' as any, 'lender.email' as any, 'purpose' as any, 'searchText' as any],
+    categoryField: 'payment_method' as any,
+    dateField: 'due_date' as any,
+    statusField: 'displayStatus' as any,
+    amountField: 'amount_remaining' as any,
+    nameField: pautangSub === 'given' ? 'borrower.full_name' as any : 'lender.full_name' as any,
+  });
+
+  const LOAN_STATUSES = [
+    { value: 'active', label: 'Active', color: colors.warning },
+    { value: 'partial', label: 'Partial', color: colors.info || colors.primary },
+    { value: 'paid', label: 'Paid', color: colors.success },
+    { value: 'overdue', label: 'Overdue', color: colors.error },
+  ];
+
+  // ─── SEARCH & FILTER for Ambagan Groups ──────────────────────────────────
+  const groupsWithData = groups.map(group => ({
+    ...group,
+    searchText: `${group.title} ${group.category || ''}`,
+  }));
+
+  const {
+    filters: groupFilters,
+    filteredData: filteredGroups,
+    hasActiveFilters: hasGroupFilters,
+    totalItems: totalGroups,
+    filteredCount: filteredGroupCount,
+    updateFilter: updateGroupFilter,
+    toggleCategory: toggleGroupCategory,
+    toggleStatus: toggleGroupStatus,
+    clearFilters: clearGroupFilters,
+  } = useSearchFilter({
+    data: groupsWithData,
+    searchFields: ['title' as any, 'category' as any, 'searchText' as any],
+    categoryField: 'category' as any,
+    dateField: 'expense_date' as any,
+    statusField: 'status' as any,
+    amountField: 'total_amount' as any,
+    nameField: 'title' as any,
+  });
+
+  const GROUP_STATUSES = [
+    { value: 'active', label: 'Active', color: colors.warning },
+    { value: 'settled', label: 'Settled', color: colors.success },
+  ];
 
   const styles = makeStyles(colors);
 
@@ -463,13 +707,49 @@ export default function RecordsScreen() {
             </View>
           </View>
 
+          {/* Search Bar for Personal */}
+          <SearchBar
+            value={personalSub === 'expenses' ? expenseFilters.searchQuery : billFilters.searchQuery}
+            onChangeText={(text) =>
+              personalSub === 'expenses'
+                ? updateExpenseFilter('searchQuery', text)
+                : updateBillFilter('searchQuery', text)
+            }
+            placeholder={personalSub === 'expenses' ? 'Search expenses...' : 'Search bills...'}
+            onFilterPress={() => setShowPersonalFilterModal(true)}
+            hasActiveFilters={personalSub === 'expenses' ? hasExpenseFilters : hasBillFilters}
+          />
+
+          {/* Result Counter */}
+          {(personalSub === 'expenses' ? totalExpenses : totalBills) > 0 && (
+            <ResultCounter
+              filteredCount={personalSub === 'expenses' ? filteredExpenseCount : filteredBillCount}
+              totalCount={personalSub === 'expenses' ? totalExpenses : totalBills}
+              itemLabel={personalSub === 'expenses' ? 'expenses' : 'bills'}
+            />
+          )}
+
           <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.listContent}
             refreshControl={<RefreshControl refreshing={personalRefreshing} onRefresh={async () => { setPersonalRefreshing(true); await loadPersonalData(); setPersonalRefreshing(false); }} tintColor={colors.primary} />}
             showsVerticalScrollIndicator={false}>
             {personalSub === 'expenses' ? (
-              expenses.length === 0
-                ? <View style={styles.emptyState}><Ionicons name="wallet-outline" size={44} color={colors.textLight} /><Text style={styles.emptyText}>No expenses this month yet.</Text></View>
-                : expenses.map(exp => (
+              filteredExpenses.length === 0 ? (
+                totalExpenses === 0 ? (
+                  <EmptyState
+                    icon="wallet-outline"
+                    title="No Expenses"
+                    message="No expenses recorded this month yet."
+                    type="no-data"
+                  />
+                ) : (
+                  <EmptyState
+                    title="No Matches Found"
+                    message="Try adjusting your search or filters."
+                    type="no-results"
+                  />
+                )
+              ) : (
+                filteredExpenses.map(exp => (
                   <TouchableOpacity key={exp.id} style={styles.itemCard} onPress={() => openEditExpense(exp)} activeOpacity={0.75}>
                     <View style={[styles.badge, { backgroundColor: colors.personalLedger + '20', alignSelf: 'flex-start' }]}>
                       <Text style={[styles.badgeText, { color: colors.personalLedger }]}>{exp.category}</Text>
@@ -487,10 +767,25 @@ export default function RecordsScreen() {
                     </View>
                   </TouchableOpacity>
                 ))
+              )
             ) : (
-              bills.length === 0
-                ? <View style={styles.emptyState}><Ionicons name="receipt-outline" size={44} color={colors.textLight} /><Text style={styles.emptyText}>No bill reminders set.</Text></View>
-                : [...bills].sort((a, b) => { if (a.is_paid && !b.is_paid) return 1; if (!a.is_paid && b.is_paid) return -1; return new Date(a.due_date).getTime() - new Date(b.due_date).getTime(); }).map(bill => {
+              filteredBills.length === 0 ? (
+                totalBills === 0 ? (
+                  <EmptyState
+                    icon="receipt-outline"
+                    title="No Bills"
+                    message="No bill reminders set yet."
+                    type="no-data"
+                  />
+                ) : (
+                  <EmptyState
+                    title="No Matches Found"
+                    message="Try adjusting your search or filters."
+                    type="no-results"
+                  />
+                )
+              ) : (
+                [...filteredBills].sort((a, b) => { if (a.is_paid && !b.is_paid) return 1; if (!a.is_paid && b.is_paid) return -1; return new Date(a.due_date).getTime() - new Date(b.due_date).getTime(); }).map(bill => {
                   const isOverdue = !bill.is_paid && new Date(bill.due_date) < new Date();
                   const isDueSoon = !bill.is_paid && !isOverdue && (new Date(bill.due_date).getTime() - Date.now()) < 3 * 86400000;
                   return (
@@ -524,6 +819,7 @@ export default function RecordsScreen() {
                     </TouchableOpacity>
                   );
                 })
+              )
             )}
             <View style={{ height: 100 }} />
           </ScrollView>
@@ -532,6 +828,23 @@ export default function RecordsScreen() {
             onPress={() => personalSub === 'expenses' ? openAddExpense() : openAddBill()}>
             <Ionicons name="add" size={28} color="#fff" />
           </TouchableOpacity>
+
+          {/* Filter Modal for Personal */}
+          <FilterModal
+            visible={showPersonalFilterModal}
+            onClose={() => setShowPersonalFilterModal(false)}
+            filters={personalSub === 'expenses' ? expenseFilters : billFilters}
+            onUpdateFilter={personalSub === 'expenses' ? updateExpenseFilter : updateBillFilter}
+            onToggleCategory={personalSub === 'expenses' ? toggleExpenseCategory : toggleBillCategory}
+            onToggleStatus={personalSub === 'expenses' ? () => {} : toggleBillStatus}
+            onClearAll={personalSub === 'expenses' ? clearExpenseFilters : clearBillFilters}
+            availableCategories={personalSub === 'expenses' ? EXP_CATEGORIES : BILL_CATEGORIES}
+            availableStatuses={personalSub === 'expenses' ? [] : BILL_STATUSES}
+            categoryLabel={personalSub === 'expenses' ? 'Expense Category' : 'Bill Category'}
+            statusLabel="Payment Status"
+            showDateFilter={true}
+            showSortOptions={true}
+          />
         </View>
       )}
 
@@ -551,48 +864,58 @@ export default function RecordsScreen() {
             </View>
           </View>
 
+          {/* Search Bar for Pautang */}
+          <SearchBar
+            value={loanFilters.searchQuery}
+            onChangeText={(text) => updateLoanFilter('searchQuery', text)}
+            placeholder={pautangSub === 'given' ? 'Search borrowers...' : 'Search lenders...'}
+            onFilterPress={() => setShowPautangFilterModal(true)}
+            hasActiveFilters={hasLoanFilters}
+          />
+
+          {/* Result Counter */}
+          {totalLoans > 0 && (
+            <ResultCounter
+              filteredCount={filteredLoanCount}
+              totalCount={totalLoans}
+              itemLabel="loans"
+            />
+          )}
+
           <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.listContent}
             refreshControl={<RefreshControl refreshing={pautangRefreshing} onRefresh={async () => { setPautangRefreshing(true); await loadPautangData(); setPautangRefreshing(false); }} tintColor={colors.primary} />}
             showsVerticalScrollIndicator={false}>
-            {pautangSub === 'given' ? (
-              <>
-                {loansGiven.length === 0 ? (
-                  <View style={styles.emptyState}><Ionicons name="people-outline" size={44} color={colors.textLight} /><Text style={styles.emptyText}>No loans given yet.</Text></View>
-                ) : (
-                  <>
-                    {loansGiven.filter(l => l.status !== 'paid').length > 0 && (
-                      <>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 12, marginLeft: 0 }}>Unsettled</Text>
-                        {loansGiven.filter(l => l.status !== 'paid').map(l => renderLoan(l, true))}
-                      </>
-                    )}
-                    {loansGiven.filter(l => l.status === 'paid').length > 0 && (
-                      <>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 12, marginTop: 16, marginLeft: 0 }}>Settled</Text>
-                        {loansGiven.filter(l => l.status === 'paid').map(l => renderLoan(l, true))}
-                      </>
-                    )}
-                  </>
-                )}
-              </>
+            {filteredLoans.length === 0 ? (
+              totalLoans === 0 ? (
+                <EmptyState
+                  icon="people-outline"
+                  title={pautangSub === 'given' ? 'No Loans Given' : 'No Loans Owed'}
+                  message={
+                    pautangSub === 'given'
+                      ? 'No loans given yet. Tap + to create one.'
+                      : "You don't owe anyone."
+                  }
+                  type="no-data"
+                />
+              ) : (
+                <EmptyState
+                  title="No Matches Found"
+                  message="Try adjusting your search or filters."
+                  type="no-results"
+                />
+              )
             ) : (
               <>
-                {loansOwed.length === 0 ? (
-                  <View style={styles.emptyState}><Ionicons name="people-outline" size={44} color={colors.textLight} /><Text style={styles.emptyText}>You don't owe anyone.</Text></View>
-                ) : (
+                {filteredLoans.filter(l => l.status !== 'paid').length > 0 && (
                   <>
-                    {loansOwed.filter(l => l.status !== 'paid').length > 0 && (
-                      <>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 12, marginLeft: 0 }}>Unsettled</Text>
-                        {loansOwed.filter(l => l.status !== 'paid').map(l => renderLoan(l, false))}
-                      </>
-                    )}
-                    {loansOwed.filter(l => l.status === 'paid').length > 0 && (
-                      <>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 12, marginTop: 16, marginLeft: 0 }}>Settled</Text>
-                        {loansOwed.filter(l => l.status === 'paid').map(l => renderLoan(l, false))}
-                      </>
-                    )}
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 12, marginLeft: 0 }}>Unsettled</Text>
+                    {filteredLoans.filter(l => l.status !== 'paid').map(l => renderLoan(l, pautangSub === 'given'))}
+                  </>
+                )}
+                {filteredLoans.filter(l => l.status === 'paid').length > 0 && (
+                  <>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textPrimary, marginBottom: 12, marginTop: 16, marginLeft: 0 }}>Settled</Text>
+                    {filteredLoans.filter(l => l.status === 'paid').map(l => renderLoan(l, pautangSub === 'given'))}
                   </>
                 )}
               </>
@@ -605,18 +928,69 @@ export default function RecordsScreen() {
               <Ionicons name="add" size={28} color="#fff" />
             </TouchableOpacity>
           )}
+
+          {/* Filter Modal for Pautang */}
+          <FilterModal
+            visible={showPautangFilterModal}
+            onClose={() => setShowPautangFilterModal(false)}
+            filters={loanFilters}
+            onUpdateFilter={updateLoanFilter}
+            onToggleCategory={toggleLoanCategory}
+            onToggleStatus={toggleLoanStatus}
+            onClearAll={clearLoanFilters}
+            availableCategories={PAYMENT_METHODS}
+            availableStatuses={LOAN_STATUSES}
+            categoryLabel="Payment Method"
+            statusLabel="Loan Status"
+            showDateFilter={true}
+            showSortOptions={true}
+          />
         </View>
       )}
 
       {/* ══ AMBAGAN ══════════════════════════════════════════════════════════ */}
       {mainTab === 'ambagan' && (
         <View style={{ flex: 1 }}>
+          {/* Search Bar for Ambagan */}
+          <View style={{ paddingTop: 8 }}>
+            <SearchBar
+              value={groupFilters.searchQuery}
+              onChangeText={(text) => updateGroupFilter('searchQuery', text)}
+              placeholder="Search groups..."
+              onFilterPress={() => setShowAmbaganFilterModal(true)}
+              hasActiveFilters={hasGroupFilters}
+            />
+
+            {/* Result Counter */}
+            {totalGroups > 0 && (
+              <ResultCounter
+                filteredCount={filteredGroupCount}
+                totalCount={totalGroups}
+                itemLabel="groups"
+              />
+            )}
+          </View>
+
           <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.listContent}
             refreshControl={<RefreshControl refreshing={ambaganRefreshing} onRefresh={async () => { setAmbaganRefreshing(true); await loadGroupsData(); setAmbaganRefreshing(false); }} tintColor={colors.primary} />}
             showsVerticalScrollIndicator={false}>
-            {groups.length === 0
-              ? <View style={[styles.emptyState, { paddingTop: 48 }]}><Ionicons name="people-outline" size={52} color={colors.textLight} /><Text style={styles.emptyText}>No group expenses yet.</Text><Text style={{ fontSize: 13, color: colors.textLight, marginTop: 4 }}>Tap + to create a shared expense</Text></View>
-              : groups.map(group => (
+            {filteredGroups.length === 0 ? (
+              totalGroups === 0 ? (
+                <EmptyState
+                  icon="people-outline"
+                  title="No Group Expenses"
+                  message="No group expenses yet. Tap + to create a shared expense."
+                  type="no-data"
+                />
+              ) : (
+                <EmptyState
+                  title="No Matches Found"
+                  message="Try adjusting your search or filters."
+                  type="no-results"
+                />
+              )
+            ) : (
+              filteredGroups.map(group => (
                 <TouchableOpacity key={group.id} style={styles.groupCard}
                   onPress={() => router.push({ pathname: '/group-detail' as any, params: { id: group.id } })}>
                   <View style={styles.groupHeader}>
@@ -648,12 +1022,31 @@ export default function RecordsScreen() {
                     <Text style={{ fontSize: 11, color: colors.textLight, fontWeight: '500' }}>Tap to view participants</Text>
                   </View>
                 </TouchableOpacity>
-              ))}
+              ))
+            )}
             <View style={{ height: 100 }} />
           </ScrollView>
+
           <TouchableOpacity style={[styles.fab, { backgroundColor: colors.primary, shadowColor: colors.primary }]} onPress={() => setShowCreate(true)}>
             <Ionicons name="add" size={28} color="#fff" />
           </TouchableOpacity>
+
+          {/* Filter Modal for Ambagan */}
+          <FilterModal
+            visible={showAmbaganFilterModal}
+            onClose={() => setShowAmbaganFilterModal(false)}
+            filters={groupFilters}
+            onUpdateFilter={updateGroupFilter}
+            onToggleCategory={toggleGroupCategory}
+            onToggleStatus={toggleGroupStatus}
+            onClearAll={clearGroupFilters}
+            availableCategories={EXP_CATEGORIES}
+            availableStatuses={GROUP_STATUSES}
+            categoryLabel="Group Category"
+            statusLabel="Group Status"
+            showDateFilter={true}
+            showSortOptions={true}
+          />
         </View>
       )}
 
@@ -746,7 +1139,13 @@ export default function RecordsScreen() {
         <View style={styles.modalHeader}><Text style={styles.modalTitle}>Create Loan</Text>
           <TouchableOpacity onPress={() => setShowAddLoan(false)} style={styles.modalClose}><Ionicons name="close" size={16} color={colors.textSecondary} /></TouchableOpacity></View>
         <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <View style={styles.fieldGroup}><Text style={styles.fieldLabel}>Borrower's Email</Text><TextInput style={styles.input} placeholder="must be a MySalapi user" placeholderTextColor={colors.textLight} value={borrowerEmail} onChangeText={setBorrowerEmail} keyboardType="email-address" autoCapitalize="none" /></View>
+          <UserOrContactPicker
+            label="Borrower's Email"
+            value={borrowerEmail}
+            onChangeText={setBorrowerEmail}
+            placeholder="must be a MySalapi user"
+            userId={user!.id}
+          />
           <View style={styles.fieldGroup}><Text style={styles.fieldLabel}>Amount (₱)</Text><TextInput style={styles.input} placeholder="0.00" placeholderTextColor={colors.textLight} value={loanAmount} onChangeText={setLoanAmount} keyboardType="decimal-pad" /></View>
           <View style={styles.fieldGroup}><Text style={styles.fieldLabel}>Purpose</Text><TextInput style={styles.input} placeholder="e.g. Emergency, Business" placeholderTextColor={colors.textLight} value={loanPurpose} onChangeText={setLoanPurpose} /></View>
           <View style={styles.fieldGroup}><DateInput label="Loan Date" value={loanDate} onChange={setLoanDate} /></View>

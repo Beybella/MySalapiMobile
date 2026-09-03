@@ -19,8 +19,6 @@ const FUND_TYPE_LABELS: Record<string, string> = {
   savings_account: 'Savings Account',
   cash: 'Cash on Hand',
 };
-const PERIOD_PRESETS = ['This Month', 'Next 7 Days', 'Next 30 Days', 'Custom'];
-const PERIOD_STORAGE_KEY = 'mysalapi_budget_period';
 
 // Bill Categories
 const BILL_CATEGORIES = [
@@ -73,9 +71,9 @@ export default function BudgetScreen() {
   const [shortfall, setShortfall] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'funds' | 'bills' | 'goals'>('overview');
-  const [periodPreset, setPeriodPreset] = useState('This Month');
   const [periodStart, setPeriodStart] = useState(startOfMonth(new Date()).toISOString().split('T')[0]);
   const [periodEnd, setPeriodEnd] = useState(endOfMonth(new Date()).toISOString().split('T')[0]);
+  const [showDateFilter, setShowDateFilter] = useState(false);
   const [showAddFund, setShowAddFund] = useState(false);
   const [showEditFund, setShowEditFund] = useState(false);
   const [showAllocate, setShowAllocate] = useState(false);
@@ -149,28 +147,10 @@ export default function BudgetScreen() {
     loadData();
   };
 
-  useEffect(() => {
-    AsyncStorage.getItem(PERIOD_STORAGE_KEY).then((saved) => {
-      if (saved) {
-        const { preset, start, end } = JSON.parse(saved);
-        setPeriodPreset(preset || 'This Month');
-        if (start) setPeriodStart(start);
-        if (end) setPeriodEnd(end);
-      }
-    });
-  }, []);
-
-  const getPeriodDates = (preset: string) => {
-    const today = new Date();
-    if (preset === 'This Month') return { start: startOfMonth(today).toISOString().split('T')[0], end: endOfMonth(today).toISOString().split('T')[0] };
-    if (preset === 'Next 7 Days') return { start: today.toISOString().split('T')[0], end: addDays(today, 7).toISOString().split('T')[0] };
-    if (preset === 'Next 30 Days') return { start: today.toISOString().split('T')[0], end: addDays(today, 30).toISOString().split('T')[0] };
-    return { start: periodStart, end: periodEnd };
-  };
-
   const loadData = async () => {
     if (!user) return;
-    const { start, end } = getPeriodDates(periodPreset);
+    const start = periodStart;
+    const end = periodEnd;
     
     // Load existing data
     const { data: funds } = await supabase.from('fund_sources').select('*').eq('user_id', user.id).order('created_at');
@@ -237,13 +217,8 @@ export default function BudgetScreen() {
     setRecommendations(recs.slice(0, 5));
   };
 
-  useEffect(() => { loadData(); }, [user, periodPreset]);
+  useEffect(() => { loadData(); }, [user, periodStart, periodEnd]);
   const onRefresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
-
-  const changePeriod = (preset: string) => {
-    setPeriodPreset(preset);
-    AsyncStorage.setItem(PERIOD_STORAGE_KEY, JSON.stringify({ preset, start: periodStart, end: periodEnd }));
-  };
 
   const deleteFundSource = (fund: any) => {
     showConfirm('Delete Fund Source', `Delete "${fund.name}"? All allocations linked to it will also be removed.`, async () => {
@@ -372,10 +347,16 @@ export default function BudgetScreen() {
     <View style={styles.container}>
       {/* Enhanced Header */}
       <View style={[styles.header, { backgroundColor: colors.budgetPlanner }]}>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Smart Budget</Text>
           <Text style={styles.headerSubtitle}>Financial Planning</Text>
         </View>
+        <TouchableOpacity 
+          style={styles.filterButton}
+          onPress={() => setShowDateFilter(true)}
+        >
+          <Ionicons name="filter" size={20} color="#fff" />
+        </TouchableOpacity>
         <View style={[styles.healthBadge, { backgroundColor: healthColor }]}>
           <Ionicons 
             name={healthStatus === 'Healthy' ? 'checkmark-circle' : healthStatus === 'At Risk' ? 'alert-circle' : 'warning'} 
@@ -385,49 +366,6 @@ export default function BudgetScreen() {
           <Text style={styles.healthText}>{healthStatus}</Text>
         </View>
       </View>
-
-      {/* Period Selector - Improved */}
-      <View style={styles.periodContainer}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.periodRow}>
-          {PERIOD_PRESETS.map((p) => (
-            <TouchableOpacity 
-              key={p} 
-              style={[styles.periodChip, periodPreset === p && styles.periodChipActive]} 
-              onPress={() => changePeriod(p)}
-            >
-              <Text style={[styles.periodChipText, periodPreset === p && styles.periodChipTextActive]}>{p}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-      </View>
-
-      {periodPreset === 'Custom' && (
-        <View style={styles.customPeriodRow}>
-          <View style={{ flex: 1 }}>
-            <DateInput 
-              label="From" 
-              value={periodStart} 
-              onChange={(d) => { 
-                setPeriodStart(d); 
-                AsyncStorage.setItem(PERIOD_STORAGE_KEY, JSON.stringify({ preset: 'Custom', start: d, end: periodEnd })); 
-                loadData(); 
-              }} 
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <DateInput 
-              label="To" 
-              value={periodEnd} 
-              onChange={(d) => { 
-                if (d < periodStart) { showError('End date must be on or after start date.'); return; }
-                setPeriodEnd(d); 
-                AsyncStorage.setItem(PERIOD_STORAGE_KEY, JSON.stringify({ preset: 'Custom', start: periodStart, end: d })); 
-                loadData(); 
-              }} 
-            />
-          </View>
-        </View>
-      )}
 
       {/* Modern Tabs */}
       <View style={styles.tabsContainer}>
@@ -1604,6 +1542,57 @@ export default function BudgetScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
+      {/* Date Filter Modal */}
+      <Modal visible={showDateFilter} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modal, { backgroundColor: colors.surface }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]}>Filter by Date Range</Text>
+              <TouchableOpacity onPress={() => setShowDateFilter(false)} style={styles.closeBtn}>
+                <Ionicons name="close" size={20} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.dateFilterContent}>
+              <DateInput 
+                label="Start Date" 
+                value={periodStart} 
+                onChange={(d) => setPeriodStart(d)} 
+              />
+              <DateInput 
+                label="End Date" 
+                value={periodEnd} 
+                onChange={(d) => {
+                  if (d < periodStart) { 
+                    showError('End date must be on or after start date.'); 
+                    return; 
+                  }
+                  setPeriodEnd(d);
+                }} 
+              />
+            </View>
+
+            <View style={styles.modalButtonRow}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonSecondary, { borderColor: colors.border }]}
+                onPress={() => setShowDateFilter(false)}
+              >
+                <Text style={[styles.modalButtonTextSecondary, { color: colors.textPrimary }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.modalButtonPrimary, { backgroundColor: colors.budgetPlanner }]}
+                onPress={() => {
+                  setShowDateFilter(false);
+                  loadData();
+                }}
+              >
+                <Text style={styles.modalButtonTextPrimary}>Apply Filter</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Error Modal */}
       <AppModal
         visible={showErrorModal}
@@ -1688,6 +1677,12 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     },
     headerTitle: { color: '#fff', fontSize: 24, fontWeight: '700', letterSpacing: 0.3 },
     headerSubtitle: { color: 'rgba(255,255,255,0.8)', fontSize: 13, marginTop: 4, fontWeight: '500' },
+    filterButton: {
+      padding: 10,
+      borderRadius: 10,
+      backgroundColor: 'rgba(255,255,255,0.2)',
+      marginRight: 10,
+    },
     healthBadge: { 
       flexDirection: 'row',
       alignItems: 'center',
@@ -1698,52 +1693,15 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     },
     healthText: { color: '#fff', fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
     
-    // Period Selector
-    periodContainer: { 
-      backgroundColor: colors.surface,
-      borderBottomWidth: 1,
-      borderBottomColor: colors.borderLight || colors.border,
-    },
-    periodRow: { 
-      paddingHorizontal: 16, 
-      paddingVertical: 14,
-      gap: 10,
-    },
-    periodChip: { 
-      paddingHorizontal: 16, 
-      paddingVertical: 9, 
-      borderRadius: 20, 
-      backgroundColor: colors.background,
-      borderWidth: 1.5, 
-      borderColor: colors.border,
-      marginRight: 8,
-    },
-    periodChipActive: { 
-      backgroundColor: colors.budgetPlanner, 
-      borderColor: colors.budgetPlanner,
-      shadowColor: colors.budgetPlanner,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.3,
-      shadowRadius: 4,
-      elevation: 2,
-    },
-    periodChipText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
-    periodChipTextActive: { color: '#fff', fontWeight: '700' },
-    
-    customPeriodRow: { 
-      flexDirection: 'row', 
-      gap: 12, 
-      paddingHorizontal: 16, 
-      paddingTop: 12,
-      paddingBottom: 16, 
-      backgroundColor: colors.surface, 
-      borderBottomWidth: 1, 
-      borderBottomColor: colors.borderLight || colors.border 
+    // Date Filter Modal
+    dateFilterContent: {
+      gap: 16,
+      marginBottom: 20,
     },
     
     // Modern Tabs
     tabsContainer: {
-      backgroundColor: colors.surface,
+      backgroundColor: colors.background,
       paddingHorizontal: 16,
       paddingTop: 12,
     },
@@ -2157,6 +2115,12 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
     modalTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
     closeBtn: { padding: 4, borderRadius: 20, backgroundColor: colors.border },
+    modalButtonRow: { flexDirection: 'row', gap: 10, marginTop: 8 },
+    modalButton: { flex: 1, padding: 14, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    modalButtonSecondary: { backgroundColor: colors.background, borderWidth: 1 },
+    modalButtonPrimary: { backgroundColor: colors.budgetPlanner },
+    modalButtonTextSecondary: { fontSize: 15, fontWeight: '600' },
+    modalButtonTextPrimary: { fontSize: 15, fontWeight: '700', color: '#fff' },
     modalSub: { fontSize: 14, color: colors.textSecondary, marginBottom: 12 },
     input: { borderWidth: 1, borderColor: colors.border, borderRadius: 10, padding: 11, fontSize: 14, marginBottom: 10, color: colors.textPrimary, backgroundColor: colors.background },
     inputLabel: { fontSize: 13, fontWeight: '600', color: colors.textSecondary, marginBottom: 6 },

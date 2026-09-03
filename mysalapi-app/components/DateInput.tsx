@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, Modal, ScrollView,
 } from 'react-native';
@@ -24,9 +24,38 @@ export default function DateInput({ label, value, onChange, minDate }: DateInput
   const [month, setMonth] = useState(parsed.getMonth());
   const [day, setDay]     = useState(parsed.getDate());
 
+  // Refs for ScrollViews
+  const yearScrollRef = useRef<ScrollView>(null);
+  const monthScrollRef = useRef<ScrollView>(null);
+  const dayScrollRef = useRef<ScrollView>(null);
+
   const daysInMonth = getDaysInMonth(new Date(year, month));
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 6 }, (_, i) => currentYear + i - 1);
+
+  // Auto-scroll to selected items when modal opens
+  useEffect(() => {
+    if (open) {
+      // Small delay to ensure ScrollViews are rendered
+      setTimeout(() => {
+        // Scroll to selected year (each chip is ~60px wide with margin)
+        const yearIndex = years.indexOf(year);
+        if (yearIndex !== -1 && yearScrollRef.current) {
+          yearScrollRef.current.scrollTo({ x: yearIndex * 60, animated: false });
+        }
+
+        // Scroll to selected month (each chip is ~60px wide with margin)
+        if (monthScrollRef.current) {
+          monthScrollRef.current.scrollTo({ x: month * 60, animated: false });
+        }
+
+        // Scroll to selected day (each chip is ~50px wide with margin)
+        if (dayScrollRef.current) {
+          dayScrollRef.current.scrollTo({ x: (day - 1) * 50, animated: false });
+        }
+      }, 100);
+    }
+  }, [open]); // Only trigger when modal opens/closes
 
   const confirm = () => {
     const d = String(day).padStart(2, '0');
@@ -52,7 +81,12 @@ export default function DateInput({ label, value, onChange, minDate }: DateInput
             <Text style={styles.pickerTitle}>{label}</Text>
 
             <Text style={styles.sectionLabel}>Year</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>
+            <ScrollView 
+              ref={yearScrollRef}
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.row}
+            >
               {years.map((y) => (
                 <TouchableOpacity key={y} style={[styles.chip, year === y && styles.chipActive]} onPress={() => { setYear(y); setDay(Math.min(day, getDaysInMonth(new Date(y, month)))); }}>
                   <Text style={[styles.chipText, year === y && styles.chipTextActive]}>{y}</Text>
@@ -61,7 +95,12 @@ export default function DateInput({ label, value, onChange, minDate }: DateInput
             </ScrollView>
 
             <Text style={styles.sectionLabel}>Month</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>
+            <ScrollView 
+              ref={monthScrollRef}
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.row}
+            >
               {MONTHS.map((m, i) => (
                 <TouchableOpacity key={m} style={[styles.chip, month === i && styles.chipActive]} onPress={() => { setMonth(i); setDay(Math.min(day, getDaysInMonth(new Date(year, i)))); }}>
                   <Text style={[styles.chipText, month === i && styles.chipTextActive]}>{m}</Text>
@@ -70,7 +109,12 @@ export default function DateInput({ label, value, onChange, minDate }: DateInput
             </ScrollView>
 
             <Text style={styles.sectionLabel}>Day</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.row}>
+            <ScrollView 
+              ref={dayScrollRef}
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              style={styles.row}
+            >
               {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => (
                 <TouchableOpacity key={d} style={[styles.chip, day === d && styles.chipActive]} onPress={() => setDay(d)}>
                   <Text style={[styles.chipText, day === d && styles.chipTextActive]}>{d}</Text>

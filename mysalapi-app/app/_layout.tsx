@@ -5,6 +5,8 @@ import { PaperProvider } from 'react-native-paper';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { ThemeProvider } from '../context/ThemeContext';
 import { useAudioPlayer } from 'expo-audio';
+import Toast from 'react-native-toast-message';
+import OfflineBanner from '../components/OfflineBanner';
 
 function SplashScreen() {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -90,6 +92,8 @@ export default function RootLayout() {
       <AuthProvider>
         <PaperProvider>
           <RootLayoutNav />
+          <OfflineBanner />
+          <Toast />
         </PaperProvider>
       </AuthProvider>
     </ThemeProvider>

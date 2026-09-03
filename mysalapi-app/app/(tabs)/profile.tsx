@@ -8,12 +8,15 @@ import { supabase } from '../../lib/supabase';
 import * as SecureStore from 'expo-secure-store';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import { useRouter } from 'expo-router';
 import AppModal from '../../components/AppModal';
 import DraggableModal from '../../components/DraggableModal';
+import ContactsModal from '../../components/ContactsModal';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const { colors, isDark, toggleTheme } = useTheme();
+  const router = useRouter();
   const [profile, setProfile] = useState<any>(null);
   const [editing, setEditing] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -80,6 +83,9 @@ export default function ProfileScreen() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [showPasswordSuccessModal, setShowPasswordSuccessModal] = useState(false);
+  
+  // ── Contacts ──────────────────────────────────────────────────────────
+  const [showContactsModal, setShowContactsModal] = useState(false);
 
   const openChangePasswordModal = () => {
     setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setPasswordError('');
@@ -283,6 +289,23 @@ const handleSignOut = () => {
         ))}
       </View>
 
+      {/* Contacts */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>My Contacts</Text>
+        <TouchableOpacity style={styles.securityRow} onPress={() => setShowContactsModal(true)}>
+          <View style={styles.securityLeft}>
+            <View style={[styles.securityIcon, { backgroundColor: colors.ambaganLedger + '15' }]}>
+              <Ionicons name="people-outline" size={18} color={colors.ambaganLedger} />
+            </View>
+            <View>
+              <Text style={styles.securityLabel}>Manage Contacts</Text>
+              <Text style={styles.securitySub}>Add & manage your contact directory</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+        </TouchableOpacity>
+      </View>
+
       {/* Security */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Security</Text>
@@ -306,6 +329,26 @@ const handleSignOut = () => {
             <View>
               <Text style={styles.securityLabel}>Change Password</Text>
               <Text style={styles.securitySub}>Update your account password</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Developer Tools */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Developer Tools</Text>
+        <TouchableOpacity 
+          style={styles.securityRow} 
+          onPress={() => router.push('/test-ux')}
+        >
+          <View style={styles.securityLeft}>
+            <View style={[styles.securityIcon, { backgroundColor: colors.info + '15' || colors.primary + '15' }]}>
+              <Ionicons name="flask-outline" size={18} color={colors.info || colors.primary} />
+            </View>
+            <View>
+              <Text style={styles.securityLabel}>Test UX Enhancements</Text>
+              <Text style={styles.securitySub}>Test new validation, toasts, and feedback</Text>
             </View>
           </View>
           <Ionicons name="chevron-forward" size={18} color={colors.textLight} />
@@ -465,6 +508,13 @@ const handleSignOut = () => {
         title="Profile Saved!"
         message="Your profile has been updated successfully."
         buttons={[{ label: 'Great', onPress: () => setShowSavedModal(false) }]}
+      />
+
+      {/* Contacts Modal */}
+      <ContactsModal
+        visible={showContactsModal}
+        onClose={() => setShowContactsModal(false)}
+        userId={user?.id || ''}
       />
     </ScrollView>
   );

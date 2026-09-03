@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useTheme } from '../../context/ThemeContext';
 import AppModal from '../../components/AppModal';
+import TermsModal from '../../components/TermsModal';
 import { sendConfirmationEmail } from '../../lib/api';
 
 export default function RegisterScreen() {
@@ -22,6 +23,7 @@ export default function RegisterScreen() {
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
   const [registeredEmail, setRegisteredEmail] = useState('');
   const router = useRouter();
   const { colors } = useTheme();
@@ -62,7 +64,12 @@ export default function RegisterScreen() {
       email,
       password,
       options: { 
-        data: { full_name: fullName, phone },
+        data: { 
+          full_name: fullName, 
+          phone,
+          terms_accepted_at: new Date().toISOString(),
+          terms_version: '1.0'
+        },
         // Don't set emailRedirectTo here - we'll handle email ourselves
       },
     });
@@ -97,17 +104,7 @@ export default function RegisterScreen() {
   };
 
   const showTerms = () => {
-    Alert.alert(
-      'Terms and Conditions',
-      'MySalapi is a personal financial management application.\n\n' +
-      '1. This app is for personal use only.\n\n' +
-      '2. All data entry is manual and purely the responsibility of the user.\n\n' +
-      '3. MySalapi is not liable for any financial decisions made based on the data entered.\n\n' +
-      '4. The app does not provide financial advice.\n\n' +
-      '5. Scope and delimitations: MySalapi tracks personal expenses, loans (Pautang), and group shared expenses (Ambagan) only.\n\n' +
-      'By using this app, you agree to these terms.',
-      [{ text: 'Close' }]
-    );
+    setShowTermsModal(true);
   };
 
   const styles = makeStyles(colors);
@@ -264,6 +261,11 @@ export default function RegisterScreen() {
             },
           },
         ]}
+      />
+
+      <TermsModal
+        visible={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
       />
     </KeyboardAvoidingView>
   );

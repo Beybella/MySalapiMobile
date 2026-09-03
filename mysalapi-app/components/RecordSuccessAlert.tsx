@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -89,8 +90,7 @@ const TYPE_CONFIG: Record<RecordSuccessType, TypeConfig> = {
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
-// NOTE: Rendered as an absolutely-positioned View overlay (not a Modal) so it
-// doesn't conflict with other Modals already open in the parent screen.
+// Rendered as its own Modal to ensure full-screen overlay and perfect centering
 
 export default function RecordSuccessAlert({
   visible,
@@ -117,55 +117,42 @@ export default function RecordSuccessAlert({
 
   useEffect(() => {
     if (visible) {
-      // Reset
+      // Reset all values
       overlayOpacity.setValue(0);
-      cardScale.setValue(0.85);
+      cardScale.setValue(0.92);
       cardOpacity.setValue(0);
       iconScale.setValue(0);
       iconRotate.setValue(0);
       checkOpacity.setValue(0);
-      detailsSlide.setValue(12);
+      detailsSlide.setValue(10);
       detailsAlpha.setValue(0);
       buttonSlide.setValue(8);
       buttonAlpha.setValue(0);
 
+      // Smooth, flowing sequence
       Animated.sequence([
-        // 1. Overlay fades in
-        Animated.timing(overlayOpacity, { toValue: 1, duration: 80, useNativeDriver: true }),
-        // 2. Card pops in
+        // 1. Quick backdrop + card entrance
         Animated.parallel([
-          Animated.spring(cardScale,   { toValue: 1, tension: 100, friction: 10, useNativeDriver: true }),
-          Animated.timing(cardOpacity, { toValue: 1, duration: 80, useNativeDriver: true }),
+          Animated.timing(overlayOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+          Animated.spring(cardScale, { toValue: 1, tension: 140, friction: 13, useNativeDriver: true }),
+          Animated.timing(cardOpacity, { toValue: 1, duration: 180, useNativeDriver: true }),
         ]),
-        // 3. Brief pause before icon
-        Animated.delay(15),
-        // 4. Icon bounces in with a little spin
+        // 2. Icon pops in immediately after card (no delay)
         Animated.parallel([
-          Animated.spring(iconScale,  { toValue: 1, tension: 120, friction: 8, useNativeDriver: true }),
-          Animated.timing(iconRotate, { toValue: 1, duration: 150, useNativeDriver: true }),
+          Animated.spring(iconScale, { toValue: 1, tension: 160, friction: 11, useNativeDriver: true }),
+          Animated.timing(iconRotate, { toValue: 1, duration: 220, useNativeDriver: true }),
+          Animated.timing(checkOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
         ]),
-        // 5. Icon check fades in
-        Animated.timing(checkOpacity, { toValue: 1, duration: 60, useNativeDriver: true }),
-        // 6. Brief pause before details
-        Animated.delay(15),
-        // 7. Details slide up
+        // 3. Details and button slide up smoothly (no pause)
         Animated.parallel([
-          Animated.timing(detailsSlide, { toValue: 0, duration: 100, useNativeDriver: true }),
-          Animated.timing(detailsAlpha, { toValue: 1, duration: 100, useNativeDriver: true }),
-        ]),
-        // 8. Brief pause before button
-        Animated.delay(15),
-        // 9. Button slides up
-        Animated.parallel([
-          Animated.timing(buttonSlide, { toValue: 0, duration: 80, useNativeDriver: true }),
-          Animated.timing(buttonAlpha, { toValue: 1, duration: 80, useNativeDriver: true }),
+          Animated.timing(detailsSlide, { toValue: 0, duration: 220, useNativeDriver: true }),
+          Animated.timing(detailsAlpha, { toValue: 1, duration: 220, useNativeDriver: true }),
+          Animated.timing(buttonSlide, { toValue: 0, duration: 220, useNativeDriver: true }),
+          Animated.timing(buttonAlpha, { toValue: 1, duration: 220, useNativeDriver: true }),
         ]),
       ]).start();
     }
   }, [visible]);
-
-  // Don't render anything when not visible — avoids layout cost
-  if (!visible) return null;
 
   const iconSpin = iconRotate.interpolate({
     inputRange: [0, 1],
@@ -175,93 +162,96 @@ export default function RecordSuccessAlert({
   const styles = makeStyles(colors, config.accent, config.bgAccent);
 
   return (
-    // Absolute overlay — sits on top of everything in the parent View
-    <Animated.View
-      style={[styles.overlay, { opacity: overlayOpacity }]}
-      // Intercept touches so nothing behind can be tapped
-      pointerEvents="box-none"
+    <Modal
+      visible={visible}
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      onRequestClose={onDismiss}
     >
-      <View style={styles.overlayTouchBlock} />
-
       <Animated.View
-        style={[
-          styles.card,
-          {
-            transform: [{ scale: cardScale }],
-            opacity: cardOpacity,
-          },
-        ]}
+        style={[styles.overlay, { opacity: overlayOpacity }]}
       >
-        {/* ── Icon ring ────────────────────────────────────────────────── */}
         <Animated.View
           style={[
-            styles.iconRing,
-            { transform: [{ scale: iconScale }, { rotate: iconSpin }] },
-          ]}
-        >
-          <View style={styles.iconRingInner} />
-          <Animated.View style={{ opacity: checkOpacity }}>
-            <Ionicons name={config.icon} size={36} color={config.accent} />
-          </Animated.View>
-        </Animated.View>
-
-        {/* ── "Success" pill ───────────────────────────────────────────── */}
-        <View style={styles.pill}>
-          <Ionicons name="checkmark" size={11} color={config.accent} />
-          <Text style={styles.pillText}>Recorded Successfully</Text>
-        </View>
-
-        {/* ── Title & subtitle ─────────────────────────────────────────── */}
-        <Text style={styles.title}>{title ?? config.defaultTitle}</Text>
-        <Text style={styles.subtitle}>{subtitle ?? config.defaultSubtitle}</Text>
-
-        {/* ── Details card ─────────────────────────────────────────────── */}
-        {details && details.length > 0 && (
-          <Animated.View
-            style={[
-              styles.detailsCard,
-              {
-                transform: [{ translateY: detailsSlide }],
-                opacity: detailsAlpha,
-              },
-            ]}
-          >
-            {details.map((row, idx) => (
-              <View
-                key={idx}
-                style={[
-                  styles.detailRow,
-                  idx < details.length - 1 && styles.detailRowBorder,
-                ]}
-              >
-                <Text style={styles.detailLabel}>{row.label}</Text>
-                <Text style={styles.detailValue}>{row.value}</Text>
-              </View>
-            ))}
-          </Animated.View>
-        )}
-
-        {/* ── Dismiss button ───────────────────────────────────────────── */}
-        <Animated.View
-          style={[
-            styles.buttonWrap,
+            styles.card,
             {
-              transform: [{ translateY: buttonSlide }],
-              opacity: buttonAlpha,
+              transform: [{ scale: cardScale }],
+              opacity: cardOpacity,
             },
           ]}
         >
-          <TouchableOpacity
-            style={styles.button}
-            onPress={onDismiss}
-            activeOpacity={0.82}
+          {/* ── Icon ring ────────────────────────────────────────────────── */}
+          <Animated.View
+            style={[
+              styles.iconRing,
+              { transform: [{ scale: iconScale }, { rotate: iconSpin }] },
+            ]}
           >
-            <Ionicons name="checkmark" size={18} color="#fff" style={{ marginRight: 8 }} />
-            <Text style={styles.buttonText}>Got it</Text>
-          </TouchableOpacity>
+            <View style={styles.iconRingInner} />
+            <Animated.View style={{ opacity: checkOpacity }}>
+              <Ionicons name={config.icon} size={36} color={config.accent} />
+            </Animated.View>
+          </Animated.View>
+
+          {/* ── "Success" pill ───────────────────────────────────────────── */}
+          <View style={styles.pill}>
+            <Ionicons name="checkmark" size={11} color={config.accent} />
+            <Text style={styles.pillText}>Recorded Successfully</Text>
+          </View>
+
+          {/* ── Title & subtitle ─────────────────────────────────────────── */}
+          <Text style={styles.title}>{title ?? config.defaultTitle}</Text>
+          <Text style={styles.subtitle}>{subtitle ?? config.defaultSubtitle}</Text>
+
+          {/* ── Details card ─────────────────────────────────────────────── */}
+          {details && details.length > 0 && (
+            <Animated.View
+              style={[
+                styles.detailsCard,
+                {
+                  transform: [{ translateY: detailsSlide }],
+                  opacity: detailsAlpha,
+                },
+              ]}
+            >
+              {details.map((row, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.detailRow,
+                    idx < details.length - 1 && styles.detailRowBorder,
+                  ]}
+                >
+                  <Text style={styles.detailLabel}>{row.label}</Text>
+                  <Text style={styles.detailValue}>{row.value}</Text>
+                </View>
+              ))}
+            </Animated.View>
+          )}
+
+          {/* ── Dismiss button ───────────────────────────────────────────── */}
+          <Animated.View
+            style={[
+              styles.buttonWrap,
+              {
+                transform: [{ translateY: buttonSlide }],
+                opacity: buttonAlpha,
+              },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.button}
+              onPress={onDismiss}
+              activeOpacity={0.82}
+            >
+              <Ionicons name="checkmark" size={18} color="#fff" style={{ marginRight: 8 }} />
+              <Text style={styles.buttonText}>Got it</Text>
+            </TouchableOpacity>
+          </Animated.View>
         </Animated.View>
       </Animated.View>
-    </Animated.View>
+    </Modal>
   );
 }
 
@@ -270,18 +260,11 @@ export default function RecordSuccessAlert({
 const makeStyles = (colors: any, accent: string, bgAccent: string) =>
   StyleSheet.create({
     overlay: {
-      // Cover the entire parent View — must be inside a View with position relative
-      ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(0,0,0,0.52)',
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.85)',
       justifyContent: 'center',
       alignItems: 'center',
       paddingHorizontal: 24,
-      zIndex: 999,
-      elevation: 999,
-    },
-    // Invisible full-screen touch blocker so taps on backdrop go nowhere
-    overlayTouchBlock: {
-      ...StyleSheet.absoluteFillObject,
     },
     card: {
       backgroundColor: colors.surface,
@@ -297,7 +280,6 @@ const makeStyles = (colors: any, accent: string, bgAccent: string) =>
       shadowOffset: { width: 0, height: 10 },
       shadowOpacity: 0.18,
       shadowRadius: 20,
-      zIndex: 1000,
     },
 
     // Icon

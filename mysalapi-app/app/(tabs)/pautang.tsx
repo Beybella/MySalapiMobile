@@ -1,18 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Modal, TextInput, Alert, RefreshControl, KeyboardAvoidingView, Platform,
+  Modal, TextInput, Alert, RefreshControl, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import { format, isPast } from 'date-fns';
 import { sendSingil } from '../../lib/api';
+import { getFriendlyError, logError } from '../../lib/errorMessages';
+import { showSuccessToast, showErrorToast } from '../../lib/toast';
+import { useEmailValidation } from '../../hooks/useEmailValidation';
+import { useFormValidation, ValidationRules } from '../../hooks/useFormValidation';
 import DateInput from '../../components/DateInput';
 import AppModal from '../../components/AppModal';
 import DraggableModal from '../../components/DraggableModal';
+import UserOrContactPicker from '../../components/UserOrContactPicker';
+import AmountInput from '../../components/AmountInput';
+import { useSearchFilter } from '../../hooks/useSearchFilter';
+import SearchBar from '../../components/SearchBar';
+import FilterModal from '../../components/FilterModal';
+import ResultCounter from '../../components/ResultCounter';
+import EmptyState from '../../components/EmptyState';
 
 const PAYMENT_METHODS = ['GCash', 'Maya', 'BDO', 'BPI', 'Cash', 'Other'];
 
@@ -27,6 +39,11 @@ export default function PautangScreen() {
   const [showRecordPayment, setShowRecordPayment] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<any>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+
+  // Loading states
+  const [creating, setCreating] = useState(false);
+  const [recording, setRecording] = useState(false);
 
   const [borrowerEmail, setBorrowerEmail] = useState('');
   const [loanAmount, setLoanAmount] = useState('');
@@ -50,6 +67,26 @@ export default function PautangScreen() {
   const [singilResultOk, setSingilResultOk] = useState(true);
   const [singilResultMsg, setSingilResultMsg] = useState('');
 
+  // Email validation for borrower
+  const emailValidation = useEmailValidation(borrowerEmail, showAddLoan);
+
+  // Form validation
+  const validation = useFormValidation({
+    fields: { borrowerEmail, loanAmount, loanPurpose, dueDate, loanDate },
+    rules: {
+      borrowerEmail: ValidationRules.email,
+      loanAmount: ValidationRules.positiveNumber,
+      loanPurpose: ValidationRules.required('Purpose'),
+      dueDate: (value, fields) => {
+        if (!value) return 'Due date is required';
+        if (fields.loanDate && new Date(value) <= new Date(fields.loanDate)) {
+          return 'Due date must be after loan date';
+        }
+        return '';
+      },
+    },
+  });
+
   const showError = (msg: string) => {
     setErrorMsg(msg);
     setShowErrorModal(true);
@@ -67,37 +104,229 @@ export default function PautangScreen() {
   const onRefresh = async () => { setRefreshing(true); await loadData(); setRefreshing(false); };
 
   const addLoan = async () => {
-    if (!borrowerEmail || !loanAmount || !dueDate) { showError('Borrower email, amount, and due date are required.'); return; }
-    const amount = parseFloat(loanAmount);
-    if (isNaN(amount) || amount <= 0) { showError('Enter a valid amount.'); return; }
-    const { data: borrower } = await supabase.from('users').select('id').eq('email', borrowerEmail.toLowerCase().trim()).single();
-    if (!borrower) { showError('No MySalapi user found with that email. They must register first.'); return; }
-    const { error } = await supabase.from('loans').insert({
-      lender_id: user!.id, borrower_id: borrower.id, amount, amount_remaining: amount,
-      purpose: loanPurpose, loan_date: loanDate, due_date: dueDate,
-      payment_method: paymentMethod, payment_details: paymentDetails, status: 'active',
-    });
-    if (error) { showError(error.message); return; }
-    setShowAddLoan(false);
-    setBorrowerEmail(''); setLoanAmount(''); setLoanPurpose(''); setDueDate(''); setPaymentDetails('');
-    loadData();
+    // Validate form first
+    validation.markAllTouched();
+    if (!validation.validateAll()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showErrorToast('Please fix the errors before submitting');
+      return;
+    }
+
+    // Check if email is valid
+    if (!emailValidation.isValid) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showErrorToast('Please enter a valid registered email');
+      return;
+    }
+
+    setCreating(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    try {
+      const amount = parseFloat(loanAmount);
+      
+      // Get borrower info
+      const { data: borrower, error: borrowerError } = await supabase
+        .from('users')
+        .select('id, email, full_name')
+        .eq('email', borrowerEmail.toLowerCase().trim())
+        .single();
+      
+      if (borrowerError || !borrower) {
+        throw new Error('No MySalapi user found with that email');
+      }
+      
+      // Create loan
+      const { error: insertError } = await supabase.from('loans').insert({
+        lender_id: user!.id,
+        borrower_id: borrower.id,
+        amount,
+        amount_remaining: amount,
+        purpose: loanPurpose,
+        loan_date: loanDate,
+        due_date: dueDate,
+        payment_method: paymentMethod,
+        payment_details: paymentDetails,
+        status: 'active',
+      });
+      
+      if (insertError) throw insertError;
+      
+      // Success!
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowAddLoan(false);
+      setBorrowerEmail('');
+      setLoanAmount('');
+      setLoanPurpose('');
+      setDueDate('');
+      setPaymentDetails('');
+      validation.reset();
+      
+      await loadData();
+      
+      showSuccessToast('💰 Loan created successfully!');
+      
+      // Check if borrower is already in contacts
+      const { data: existingContact } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('user_id', user!.id)
+        .eq('email', borrower.email.toLowerCase())
+        .single();
+      
+      // Offer to save contact
+      if (!existingContact) {
+        setTimeout(() => {
+          Alert.alert(
+            'Save to Contacts?',
+            `Would you like to save ${borrower.full_name || borrower.email} to your contacts for quick access next time?`,
+            [
+              { text: 'No, Thanks', style: 'cancel' },
+              {
+                text: 'Save',
+                onPress: async () => {
+                  const { error: contactError } = await supabase
+                    .from('contacts')
+                    .insert({
+                      user_id: user!.id,
+                      email: borrower.email.toLowerCase(),
+                      full_name: borrower.full_name || '',
+                    });
+                  
+                  if (!contactError) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    showSuccessToast(`✓ ${borrower.full_name || borrower.email} added to contacts`);
+                  }
+                },
+              },
+            ]
+          );
+        }, 500);
+      }
+    } catch (error: any) {
+      logError(error, 'addLoan');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const friendlyMessage = getFriendlyError(error);
+      showErrorToast(friendlyMessage);
+    } finally {
+      setCreating(false);
+    }
   };
 
   const recordPayment = async () => {
     if (!payAmount || !selectedLoan) return;
+    
     const amount = parseFloat(payAmount);
-    if (isNaN(amount) || amount <= 0) { showError('Enter a valid amount.'); return; }
-    if (amount > selectedLoan.amount_remaining) { showError(`Amount exceeds remaining balance of ₱${selectedLoan.amount_remaining}`); return; }
-    const newRemaining = Number(selectedLoan.amount_remaining) - amount;
-    const newStatus = newRemaining <= 0 ? 'paid' : 'partial';
-    await supabase.from('loan_payments').insert({ loan_id: selectedLoan.id, amount, payment_date: payDate, payment_method: payMethod, recorded_by: user!.id });
-    await supabase.from('loans').update({ amount_remaining: newRemaining, status: newStatus }).eq('id', selectedLoan.id);
-    setShowRecordPayment(false);
-    setPayAmount(''); setSelectedLoan(null);
-    loadData();
+    if (isNaN(amount) || amount <= 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showErrorToast('Enter a valid amount');
+      return;
+    }
+    
+    if (amount > selectedLoan.amount_remaining) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      showErrorToast(`Amount exceeds remaining balance of ₱${selectedLoan.amount_remaining.toLocaleString()}`);
+      return;
+    }
+    
+    setRecording(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    try {
+      const newRemaining = Number(selectedLoan.amount_remaining) - amount;
+      const newStatus = newRemaining <= 0 ? 'paid' : 'partial';
+      
+      // Insert payment record
+      const { error: paymentError } = await supabase
+        .from('loan_payments')
+        .insert({
+          loan_id: selectedLoan.id,
+          amount,
+          payment_date: payDate,
+          payment_method: payMethod,
+          recorded_by: user!.id,
+        });
+      
+      if (paymentError) throw paymentError;
+      
+      // Update loan status
+      const { error: updateError } = await supabase
+        .from('loans')
+        .update({
+          amount_remaining: newRemaining,
+          status: newStatus,
+        })
+        .eq('id', selectedLoan.id);
+      
+      if (updateError) throw updateError;
+      
+      // Check if loan is fully paid
+      const isFullyPaid = newRemaining <= 0;
+      
+      if (isFullyPaid) {
+        // Celebration for full payment!
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setTimeout(() => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }, 200);
+        showSuccessToast('🎉 Loan fully paid!', 'Congratulations!');
+      } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showSuccessToast('✓ Payment recorded', `₱${newRemaining.toLocaleString()} remaining`);
+      }
+      
+      setShowRecordPayment(false);
+      setPayAmount('');
+      setSelectedLoan(null);
+      await loadData();
+    } catch (error: any) {
+      logError(error, 'recordPayment');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const friendlyMessage = getFriendlyError(error);
+      showErrorToast(friendlyMessage);
+    } finally {
+      setRecording(false);
+    }
   };
 
   const [sendingSingil, setSendingSingil] = React.useState<string | null>(null);
+
+  // Get active data based on tab and add overdue status
+  const activeData = (activeTab === 'given' ? loansGiven : loansOwed).map((loan) => {
+    const isOverdue = loan.status !== 'paid' && loan.due_date && isPast(new Date(loan.due_date));
+    return { ...loan, displayStatus: isOverdue ? 'overdue' : loan.status };
+  });
+
+  // Apply search & filter
+  const {
+    filters,
+    filteredData,
+    hasActiveFilters,
+    totalItems,
+    filteredCount,
+    updateFilter,
+    toggleCategory,
+    toggleStatus,
+    clearFilters,
+  } = useSearchFilter({
+    data: activeData,
+    searchFields: activeTab === 'given' 
+      ? ['borrower.full_name' as any, 'borrower.email' as any, 'purpose' as any]
+      : ['lender.full_name' as any, 'lender.email' as any, 'purpose' as any],
+    categoryField: 'payment_method' as any,
+    dateField: 'due_date' as any,
+    statusField: 'displayStatus' as any,
+    amountField: 'amount_remaining' as any,
+    nameField: activeTab === 'given' ? 'borrower.full_name' as any : 'lender.full_name' as any,
+  });
+
+  // Available statuses with colors
+  const LOAN_STATUSES = [
+    { value: 'active', label: 'Active', color: colors.warning },
+    { value: 'partial', label: 'Partial', color: colors.info || colors.primary },
+    { value: 'paid', label: 'Paid', color: colors.success },
+    { value: 'overdue', label: 'Overdue', color: colors.error },
+  ];
 
   const sendSingilEmail = (loan: any) => {
     setSingilTarget(loan);
@@ -110,23 +339,60 @@ export default function PautangScreen() {
     if (!loan || sendingSingil === loan.id) return;
 
     setSendingSingil(loan.id);
-    const { data: lenderProfile } = await supabase.from('users').select('full_name, email').eq('id', user!.id).single();
-    const { data: notif } = await supabase.from('email_notifications').insert({
-      recipient_email: loan.borrower?.email,
-      subject_email: `Payment Reminder: ₱${loan.amount_remaining} due`,
-      notification_type: 'singil', subject_cost_id: loan.id, status: 'pending',
-    }).select().single();
-    const result = await sendSingil({
-      recipient_email: loan.borrower?.email,
-      lender_name: lenderProfile?.full_name || lenderProfile?.email || 'Your lender',
-      amount: Number(loan.amount_remaining), purpose: loan.purpose,
-      due_date: loan.due_date, payment_method: loan.payment_method,
-      payment_details: loan.payment_details, notification_id: notif?.id,
-    });
-    setSendingSingil(null);
-    setSingilResultOk(result.success);
-    setSingilResultMsg(result.success ? 'Singil email has been sent to the borrower.' : (result.error ?? 'Could not send email.'));
-    setShowSingilResult(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    try {
+      const { data: lenderProfile } = await supabase
+        .from('users')
+        .select('full_name, email')
+        .eq('id', user!.id)
+        .single();
+      
+      const { data: notif } = await supabase
+        .from('email_notifications')
+        .insert({
+          recipient_email: loan.borrower?.email,
+          subject_email: `Payment Reminder: ₱${loan.amount_remaining} due`,
+          notification_type: 'singil',
+          subject_cost_id: loan.id,
+          status: 'pending',
+        })
+        .select()
+        .single();
+      
+      const result = await sendSingil({
+        recipient_email: loan.borrower?.email,
+        lender_name: lenderProfile?.full_name || lenderProfile?.email || 'Your lender',
+        amount: Number(loan.amount_remaining),
+        purpose: loan.purpose,
+        due_date: loan.due_date,
+        payment_method: loan.payment_method,
+        payment_details: loan.payment_details,
+        notification_id: notif?.id,
+      });
+      
+      if (result.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showSuccessToast('📧 Singil email sent!', `Sent to ${loan.borrower?.email}`);
+      } else {
+        throw new Error(result.error || 'Could not send email');
+      }
+      
+      setSingilResultOk(result.success);
+      setSingilResultMsg(result.success ? 'Singil email has been sent to the borrower.' : (result.error ?? 'Could not send email.'));
+      setShowSingilResult(true);
+    } catch (error: any) {
+      logError(error, 'confirmSendSingil');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const friendlyMessage = getFriendlyError(error);
+      showErrorToast(friendlyMessage);
+      
+      setSingilResultOk(false);
+      setSingilResultMsg(friendlyMessage);
+      setShowSingilResult(true);
+    } finally {
+      setSendingSingil(null);
+    }
   };
 
   const formatCurrency = (n: number) => `₱${Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`;
@@ -200,7 +466,10 @@ export default function PautangScreen() {
             <TouchableOpacity 
               key={tab} 
               style={[styles.tab, activeTab === tab && styles.tabActive]} 
-              onPress={() => setActiveTab(tab)}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setActiveTab(tab);
+              }}
             >
               <Ionicons 
                 name={tab === 'given' ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'} 
@@ -215,11 +484,46 @@ export default function PautangScreen() {
         </View>
       </View>
 
+      {/* Search Bar */}
+      <SearchBar
+        value={filters.searchQuery}
+        onChangeText={(text) => updateFilter('searchQuery', text)}
+        placeholder={`Search ${activeTab === 'given' ? 'borrowers' : 'lenders'}...`}
+        onFilterPress={() => setShowFilterModal(true)}
+        hasActiveFilters={hasActiveFilters}
+      />
+
+      {/* Result Counter */}
+      {totalItems > 0 && (
+        <ResultCounter
+          filteredCount={filteredCount}
+          totalCount={totalItems}
+          itemLabel="loans"
+        />
+      )}
+
       <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />} style={styles.list}>
-        {activeTab === 'given' ? (
-          loansGiven.length === 0 ? <Text style={styles.emptyText}>No loans given yet.</Text> : loansGiven.map((l) => renderLoan(l, true))
+        {filteredData.length === 0 ? (
+          totalItems === 0 ? (
+            <EmptyState
+              icon={activeTab === 'given' ? 'arrow-up-circle-outline' : 'arrow-down-circle-outline'}
+              title={activeTab === 'given' ? 'No Loans Given' : 'No Loans Owed'}
+              message={
+                activeTab === 'given'
+                  ? 'Start tracking loans by tapping the + button below.'
+                  : "You don't owe anyone. Great job!"
+              }
+              type="no-data"
+            />
+          ) : (
+            <EmptyState
+              title="No Matches Found"
+              message="Try adjusting your search or filters to find what you're looking for."
+              type="no-results"
+            />
+          )
         ) : (
-          loansOwed.length === 0 ? <Text style={styles.emptyText}>You don't owe anyone.</Text> : loansOwed.map((l) => renderLoan(l, false))
+          filteredData.map((loan) => renderLoan(loan, activeTab === 'given'))
         )}
       </ScrollView>
 
@@ -237,30 +541,122 @@ export default function PautangScreen() {
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <View style={styles.fieldGroup}>
-                <Text style={styles.inputLabel}>Borrower's Email</Text>
-                <TextInput style={styles.input} placeholder="must be a MySalapi user" placeholderTextColor={colors.textLight} value={borrowerEmail} onChangeText={setBorrowerEmail} keyboardType="email-address" autoCapitalize="none" />
-              </View>
-              <View style={styles.fieldGroup}>
-                <Text style={styles.inputLabel}>Amount (₱)</Text>
-                <TextInput style={styles.input} placeholder="0.00" placeholderTextColor={colors.textLight} value={loanAmount} onChangeText={setLoanAmount} keyboardType="decimal-pad" />
-              </View>
+              <UserOrContactPicker
+                label="Borrower's Email"
+                value={borrowerEmail}
+                onChangeText={(text) => {
+                  setBorrowerEmail(text);
+                  if (validation.touched.borrowerEmail) {
+                    validation.validate('borrowerEmail', text);
+                  }
+                }}
+                placeholder="must be a MySalapi user or contact"
+                userId={user!.id}
+              />
+              
+              {/* Email validation feedback */}
+              {borrowerEmail && (
+                <View style={styles.validationRow}>
+                  {emailValidation.status === 'checking' && (
+                    <>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <Text style={styles.validationChecking}>Checking...</Text>
+                    </>
+                  )}
+                  {emailValidation.status === 'valid' && (
+                    <>
+                      <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                      <Text style={[styles.validationText, { color: colors.success }]}>
+                        {emailValidation.message}
+                      </Text>
+                    </>
+                  )}
+                  {emailValidation.status === 'invalid' && (
+                    <>
+                      <Ionicons name="close-circle" size={18} color={colors.error} />
+                      <Text style={[styles.validationText, { color: colors.error }]}>
+                        {emailValidation.message}
+                      </Text>
+                    </>
+                  )}
+                </View>
+              )}
+              
+              {validation.touched.borrowerEmail && validation.errors.borrowerEmail && (
+                <Text style={styles.errorText}>{validation.errors.borrowerEmail}</Text>
+              )}
+              
+              <AmountInput
+                label="Loan Amount"
+                value={loanAmount}
+                onChangeText={(text) => {
+                  setLoanAmount(text);
+                  if (validation.touched.loanAmount) {
+                    validation.validate('loanAmount', text);
+                  }
+                }}
+                min={100}
+                hint="Minimum: ₱100"
+                error={validation.errors.loanAmount}
+                touched={validation.touched.loanAmount}
+              />
               <View style={styles.fieldGroup}>
                 <Text style={styles.inputLabel}>Purpose</Text>
-                <TextInput style={styles.input} placeholder="e.g. Emergency, Business" placeholderTextColor={colors.textLight} value={loanPurpose} onChangeText={setLoanPurpose} />
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Emergency, Business"
+                  placeholderTextColor={colors.textLight}
+                  value={loanPurpose}
+                  onChangeText={(text) => {
+                    setLoanPurpose(text);
+                    if (validation.touched.loanPurpose) {
+                      validation.validate('loanPurpose', text);
+                    }
+                  }}
+                  onBlur={() => {
+                    validation.markTouched('loanPurpose');
+                    validation.validate('loanPurpose', loanPurpose);
+                  }}
+                  maxLength={100}
+                />
+                {loanPurpose && (
+                  <Text style={styles.charCount}>{loanPurpose.length}/100</Text>
+                )}
+                {validation.touched.loanPurpose && validation.errors.loanPurpose && (
+                  <Text style={styles.errorText}>{validation.errors.loanPurpose}</Text>
+                )}
               </View>
               <View style={styles.fieldGroup}>
                 <DateInput label="Loan Date" value={loanDate} onChange={setLoanDate} />
               </View>
               <View style={styles.fieldGroup}>
-                <DateInput label="Due Date" value={dueDate} onChange={setDueDate} />
+                <DateInput
+                  label="Due Date"
+                  value={dueDate}
+                  onChange={(date) => {
+                    setDueDate(date);
+                    if (validation.touched.dueDate) {
+                      validation.validate('dueDate', date);
+                    }
+                  }}
+                />
+                {validation.touched.dueDate && validation.errors.dueDate && (
+                  <Text style={styles.errorText}>{validation.errors.dueDate}</Text>
+                )}
               </View>
               <View style={styles.fieldGroup}>
                 <Text style={styles.inputLabel}>Payment Method</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     {PAYMENT_METHODS.map((m) => (
-                      <TouchableOpacity key={m} style={[styles.catChip, paymentMethod === m && styles.catChipActive]} onPress={() => setPaymentMethod(m)}>
+                      <TouchableOpacity
+                        key={m}
+                        style={[styles.catChip, paymentMethod === m && styles.catChipActive]}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setPaymentMethod(m);
+                        }}
+                      >
                         <Text style={[styles.catChipText, paymentMethod === m && styles.catChipTextActive]}>{m}</Text>
                       </TouchableOpacity>
                     ))}
@@ -271,8 +667,23 @@ export default function PautangScreen() {
                 <Text style={styles.inputLabel}>Payment Details</Text>
                 <TextInput style={styles.input} placeholder="e.g. GCash number" placeholderTextColor={colors.textLight} value={paymentDetails} onChangeText={setPaymentDetails} />
               </View>
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.pautangLedger }]} onPress={addLoan}>
-                <Text style={styles.saveBtnText}>Create Loan</Text>
+              <TouchableOpacity
+                style={[
+                  styles.saveBtn,
+                  { backgroundColor: colors.pautangLedger },
+                  (creating || !emailValidation.isValid) && styles.saveBtnDisabled
+                ]}
+                onPress={addLoan}
+                disabled={creating || !emailValidation.isValid}
+              >
+                {creating ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+                    <Text style={styles.saveBtnText}>Creating...</Text>
+                  </>
+                ) : (
+                  <Text style={styles.saveBtnText}>Create Loan</Text>
+                )}
               </TouchableOpacity>
             </ScrollView>
       </DraggableModal>
@@ -291,10 +702,14 @@ export default function PautangScreen() {
                   <Text style={{ fontSize: 22, fontWeight: '800', color: colors.pautangLedger }}>{formatCurrency(selectedLoan.amount_remaining)}</Text>
                 </View>
               )}
-              <View style={styles.fieldGroup}>
-                <Text style={styles.inputLabel}>Amount Paid (₱)</Text>
-                <TextInput style={styles.input} placeholder="0.00" placeholderTextColor={colors.textLight} value={payAmount} onChangeText={setPayAmount} keyboardType="decimal-pad" />
-              </View>
+              
+              <AmountInput
+                label="Payment Amount"
+                value={payAmount}
+                onChangeText={setPayAmount}
+                max={selectedLoan?.amount_remaining}
+                hint={selectedLoan ? `Max: ₱${selectedLoan.amount_remaining.toLocaleString()}` : undefined}
+              />
               <View style={styles.fieldGroup}>
                 <Text style={styles.inputLabel}>Payment Date</Text>
                 <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor={colors.textLight} value={payDate} onChangeText={setPayDate} />
@@ -304,15 +719,37 @@ export default function PautangScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     {PAYMENT_METHODS.map((m) => (
-                      <TouchableOpacity key={m} style={[styles.catChip, payMethod === m && styles.catChipActive]} onPress={() => setPayMethod(m)}>
+                      <TouchableOpacity
+                        key={m}
+                        style={[styles.catChip, payMethod === m && styles.catChipActive]}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setPayMethod(m);
+                        }}
+                      >
                         <Text style={[styles.catChipText, payMethod === m && styles.catChipTextActive]}>{m}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 </ScrollView>
               </View>
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.pautangLedger }]} onPress={recordPayment}>
-                <Text style={styles.saveBtnText}>Save Payment</Text>
+              <TouchableOpacity
+                style={[
+                  styles.saveBtn,
+                  { backgroundColor: colors.pautangLedger },
+                  recording && styles.saveBtnDisabled
+                ]}
+                onPress={recordPayment}
+                disabled={recording}
+              >
+                {recording ? (
+                  <>
+                    <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+                    <Text style={styles.saveBtnText}>Recording...</Text>
+                  </>
+                ) : (
+                  <Text style={styles.saveBtnText}>Save Payment</Text>
+                )}
               </TouchableOpacity>
             </ScrollView>
       </DraggableModal>
@@ -348,6 +785,23 @@ export default function PautangScreen() {
         title={singilResultOk ? 'Sent!' : 'Failed'}
         message={singilResultMsg}
         buttons={[{ label: 'OK', onPress: () => setShowSingilResult(false) }]}
+      />
+
+      {/* Filter Modal */}
+      <FilterModal
+        visible={showFilterModal}
+        onClose={() => setShowFilterModal(false)}
+        filters={filters}
+        onUpdateFilter={updateFilter}
+        onToggleCategory={toggleCategory}
+        onToggleStatus={toggleStatus}
+        onClearAll={clearFilters}
+        availableCategories={PAYMENT_METHODS}
+        availableStatuses={LOAN_STATUSES}
+        categoryLabel="Payment Method"
+        statusLabel="Loan Status"
+        showDateFilter={true}
+        showSortOptions={true}
       />
     </View>
   );
@@ -496,7 +950,40 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
       padding: 16, borderRadius: 14, backgroundColor: colors.primary, alignItems: 'center',
       marginTop: 8, marginBottom: 10,
       shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
+      shadowOpacity: 0.25, shadowRadius: 8, elevation: 5,
+      flexDirection: 'row', justifyContent: 'center',
     },
-    saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 16, letterSpacing: 0.3 },
+    saveBtnDisabled: {
+      opacity: 0.6,
+    },
+    saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+    validationRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: -12,
+      marginBottom: 16,
+    },
+    validationChecking: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    validationText: {
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    errorText: {
+      fontSize: 12,
+      color: colors.error,
+      marginTop: -10,
+      marginBottom: 12,
+      fontWeight: '500',
+    },
+    charCount: {
+      fontSize: 11,
+      color: colors.textLight,
+      textAlign: 'right',
+      marginTop: 4,
+    },
   });

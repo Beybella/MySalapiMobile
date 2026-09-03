@@ -231,19 +231,21 @@ export default function QuickAddScreen() {
         <View style={styles.overlay} />
         <View style={styles.modal}>
 
-          {/* Header */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={addType ? () => addType === 'personal_expense' || addType === 'personal_bill' ? setAddType('personal') : setAddType(null) : handleClose} style={styles.closeBtn}>
-              <Ionicons name={addType ? 'arrow-back' : 'close'} size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <Text style={styles.title}>
-              {addType === 'personal' ? 'Personal' : addType === 'personal_expense' ? 'Add Expense' : addType === 'personal_bill' ? 'Add Bill Reminder' : addType === 'pautang' ? 'Create Loan' : addType === 'ambagan' ? 'Group Expense' : 'Quick Add'}
-            </Text>
-            <View style={{ width: 38 }} />
-          </View>
+          {/* Header - hide when success alert is shown */}
+          {!successAlert.visible && (
+            <View style={styles.header}>
+              <TouchableOpacity onPress={addType ? () => addType === 'personal_expense' || addType === 'personal_bill' ? setAddType('personal') : setAddType(null) : handleClose} style={styles.closeBtn}>
+                <Ionicons name={addType ? 'arrow-back' : 'close'} size={22} color={colors.textPrimary} />
+              </TouchableOpacity>
+              <Text style={styles.title}>
+                {addType === 'personal' ? 'Personal' : addType === 'personal_expense' ? 'Add Expense' : addType === 'personal_bill' ? 'Add Bill Reminder' : addType === 'pautang' ? 'Create Loan' : addType === 'ambagan' ? 'Group Expense' : 'Quick Add'}
+              </Text>
+              <View style={{ width: 38 }} />
+            </View>
+          )}
 
           {/* ── Type picker ── */}
-          {!addType && (
+          {!addType && !successAlert.visible && (
             <View style={styles.typePicker}>
               <Text style={styles.typePickerLabel}>What would you like to add?</Text>
               {[
@@ -266,7 +268,7 @@ export default function QuickAddScreen() {
           )}
 
           {/* ── Personal sub-picker ── */}
-          {addType === 'personal' && (
+          {addType === 'personal' && !successAlert.visible && (
             <View style={styles.typePicker}>
               <Text style={styles.typePickerLabel}>Choose type</Text>
               {[
@@ -288,7 +290,7 @@ export default function QuickAddScreen() {
           )}
 
           {/* ── Personal Expense form ── */}
-          {addType === 'personal_expense' && (
+          {addType === 'personal_expense' && !successAlert.visible && (
             <ScrollView style={styles.form} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Title</Text>
@@ -322,7 +324,7 @@ export default function QuickAddScreen() {
           )}
 
           {/* ── Personal Bill form ── */}
-          {addType === 'personal_bill' && (
+          {addType === 'personal_bill' && !successAlert.visible && (
             <ScrollView style={styles.form} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Bill Name</Text>
@@ -361,7 +363,7 @@ export default function QuickAddScreen() {
           )}
 
           {/* ── Pautang form ── */}
-          {addType === 'pautang' && (
+          {addType === 'pautang' && !successAlert.visible && (
             <ScrollView style={styles.form} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Borrower's Email</Text>
@@ -402,7 +404,7 @@ export default function QuickAddScreen() {
           )}
 
           {/* ── Ambagan form ── */}
-          {addType === 'ambagan' && (
+          {addType === 'ambagan' && !successAlert.visible && (
             <ScrollView style={styles.form} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Title</Text>
@@ -527,7 +529,7 @@ export default function QuickAddScreen() {
         onButtonPress={() => setResultAlert({ ...resultAlert, visible: false })}
       />
 
-      {/* Success Alert for new records */}
+      {/* Success Alert for new records - renders as its own full-screen modal */}
       <RecordSuccessAlert
         visible={successAlert.visible}
         type={successAlert.type}
