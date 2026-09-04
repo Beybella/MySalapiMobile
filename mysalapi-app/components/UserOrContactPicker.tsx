@@ -56,12 +56,9 @@ export default function UserOrContactPicker({
           style={styles.iconButton}
           onPress={() => setShowContactsModal(true)}
         >
-          <Ionicons name="people" size={20} color={colors.primary} />
+          <Ionicons name="people" size={18} color={colors.primary} />
         </TouchableOpacity>
       </View>
-      <Text style={styles.hint}>
-        Tap <Ionicons name="people" size={12} color={colors.primary} /> to select from your contacts
-      </Text>
 
       <ContactsModal
         visible={showContactsModal}
@@ -100,13 +97,11 @@ const makeStyles = (colors: ReturnType<typeof import('../context/ThemeContext').
       color: colors.textPrimary,
     },
     iconButton: {
-      padding: 14,
-      paddingLeft: 8,
-    },
-    hint: {
-      fontSize: 11,
-      color: colors.textLight,
-      marginTop: 4,
-      marginLeft: 4,
+      padding: 8,
+      marginRight: 8,
+      borderWidth: 1.5,
+      borderColor: colors.border,
+      borderRadius: 8,
+      backgroundColor: colors.background,
     },
   });

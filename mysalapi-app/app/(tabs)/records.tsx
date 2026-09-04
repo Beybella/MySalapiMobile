@@ -1469,12 +1469,12 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     input: {
       borderWidth: 1.5, borderColor: colors.border, borderRadius: 14,
       paddingHorizontal: 16, paddingVertical: 14,
-      fontSize: 15, color: colors.textPrimary, backgroundColor: colors.background,
+      fontSize: 15, color: colors.textPrimary, backgroundColor: colors.surface,
     },
     helpText: { fontSize: 12, color: colors.textLight, marginTop: 6, lineHeight: 17 },
     chip: {
       paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-      borderWidth: 1.5, borderColor: colors.border, marginRight: 8, backgroundColor: colors.background,
+      borderWidth: 1.5, borderColor: colors.border, marginRight: 8, backgroundColor: colors.surface,
     },
     chipText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
     saveBtn: {

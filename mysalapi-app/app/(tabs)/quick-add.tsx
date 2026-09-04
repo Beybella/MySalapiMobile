@@ -12,6 +12,8 @@ import { useTheme } from '../../context/ThemeContext';
 import DateInput from '../../components/DateInput';
 import ResultAlert from '../../components/ResultAlert';
 import RecordSuccessAlert from '../../components/RecordSuccessAlert';
+import UserOrContactPicker from '../../components/UserOrContactPicker';
+import ContactsModal from '../../components/ContactsModal';
 import { EXP_CATEGORIES, BILL_CATEGORIES, PAYMENT_METHODS, formatCurrency } from '../../constants/recordConstants';
 import { useRecordSuccess } from '../../hooks/useRecordSuccess';
 
@@ -72,6 +74,22 @@ export default function QuickAddScreen() {
   const [splitMode, setSplitMode] = useState<'equal' | 'custom'>('equal');
   const [customMembers, setCustomMembers] = useState<{ email: string; amount: string }[]>([{ email: '', amount: '' }]);
   const customTotal = customMembers.reduce((s, m) => { const n = parseFloat(m.amount); return s + (isNaN(n) ? 0 : n); }, 0);
+
+  // ── Contacts Modal for Ambagan ────────────────────────────────────────────
+  const [showContactsModal, setShowContactsModal] = useState(false);
+  const [contactsTargetIndex, setContactsTargetIndex] = useState<number | null>(null);
+  const [contactsTargetType, setContactsTargetType] = useState<'equal' | 'custom'>('equal');
+
+  const handleSelectContact = (email: string, name: string) => {
+    if (contactsTargetIndex === null) return;
+    if (contactsTargetType === 'equal') {
+      setMemberEmails(prev => prev.map((e, idx) => idx === contactsTargetIndex ? email : e));
+    } else {
+      setCustomMembers(prev => prev.map((m, idx) => idx === contactsTargetIndex ? { ...m, email } : m));
+    }
+    setShowContactsModal(false);
+    setContactsTargetIndex(null);
+  };
 
   useFocusEffect(
     React.useCallback(() => {
@@ -365,10 +383,13 @@ export default function QuickAddScreen() {
           {/* ── Pautang form ── */}
           {addType === 'pautang' && !successAlert.visible && (
             <ScrollView style={styles.form} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>Borrower's Email</Text>
-                <TextInput style={styles.input} placeholder="must be a MySalapi user" placeholderTextColor={colors.textLight} value={borrowerEmail} onChangeText={setBorrowerEmail} keyboardType="email-address" autoCapitalize="none" />
-              </View>
+              <UserOrContactPicker
+                label="Borrower's Email"
+                value={borrowerEmail}
+                onChangeText={setBorrowerEmail}
+                placeholder="must be a MySalapi user"
+                userId={user!.id}
+              />
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Amount (₱)</Text>
                 <TextInput style={[styles.input, styles.amountInput]} placeholder="0.00" placeholderTextColor={colors.textLight} value={loanAmount} onChangeText={setLoanAmount} keyboardType="decimal-pad" />
@@ -447,8 +468,14 @@ export default function QuickAddScreen() {
                   <Text style={{ fontSize: 12, color: colors.textLight, marginBottom: 8 }}>Split equally including you.</Text>
                   {memberEmails.map((email, i) => (
                     <View key={i} style={{ flexDirection: 'row', gap: 8, marginBottom: 10, alignItems: 'center' }}>
-                      <TextInput style={[styles.input, { flex: 1 }]} placeholder={`Member ${i + 1} email`} placeholderTextColor={colors.textLight}
-                        value={email} onChangeText={v => setMemberEmails(prev => prev.map((e, idx) => idx === i ? v : e))} autoCapitalize="none" keyboardType="email-address" />
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, overflow: 'hidden' }}>
+                        <TextInput style={[styles.input, { flex: 1, borderWidth: 0 }]} placeholder={`Member ${i + 1} email`} placeholderTextColor={colors.textLight}
+                          value={email} onChangeText={v => setMemberEmails(prev => prev.map((e, idx) => idx === i ? v : e))} autoCapitalize="none" keyboardType="email-address" />
+                        <TouchableOpacity style={{ padding: 8, marginRight: 8, borderWidth: 1.5, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.background }}
+                          onPress={() => { setContactsTargetIndex(i); setContactsTargetType('equal'); setShowContactsModal(true); }}>
+                          <Ionicons name="people" size={18} color={colors.primary} />
+                        </TouchableOpacity>
+                      </View>
                       {memberEmails.length > 1 && (
                         <TouchableOpacity style={{ padding: 10, borderRadius: 10, backgroundColor: colors.error + '15' }}
                           onPress={() => setMemberEmails(prev => prev.filter((_, idx) => idx !== i))}>
@@ -474,8 +501,14 @@ export default function QuickAddScreen() {
                   <Text style={{ fontSize: 12, color: colors.textLight, marginBottom: 8 }}>Enter each member's email and how much they owe you.</Text>
                   {customMembers.map((m, i) => (
                     <View key={i} style={{ flexDirection: 'row', gap: 8, marginBottom: 10, alignItems: 'center' }}>
-                      <TextInput style={[styles.input, { flex: 2 }]} placeholder="email@example.com" placeholderTextColor={colors.textLight}
-                        value={m.email} onChangeText={v => setCustomMembers(prev => prev.map((c, idx) => idx === i ? { ...c, email: v } : c))} autoCapitalize="none" keyboardType="email-address" />
+                      <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, overflow: 'hidden' }}>
+                        <TextInput style={[styles.input, { flex: 1, borderWidth: 0 }]} placeholder="email@example.com" placeholderTextColor={colors.textLight}
+                          value={m.email} onChangeText={v => setCustomMembers(prev => prev.map((c, idx) => idx === i ? { ...c, email: v } : c))} autoCapitalize="none" keyboardType="email-address" />
+                        <TouchableOpacity style={{ padding: 8, marginRight: 8, borderWidth: 1.5, borderColor: colors.border, borderRadius: 8, backgroundColor: colors.background }}
+                          onPress={() => { setContactsTargetIndex(i); setContactsTargetType('custom'); setShowContactsModal(true); }}>
+                          <Ionicons name="people" size={18} color={colors.primary} />
+                        </TouchableOpacity>
+                      </View>
                       <TextInput style={[styles.input, { flex: 1 }]} placeholder="₱0" placeholderTextColor={colors.textLight}
                         value={m.amount} onChangeText={v => setCustomMembers(prev => prev.map((c, idx) => idx === i ? { ...c, amount: v } : c))} keyboardType="decimal-pad" />
                       {customMembers.length > 1 && (
@@ -538,6 +571,14 @@ export default function QuickAddScreen() {
         details={successAlert.details}
         onDismiss={hideSuccess}
       />
+
+      {/* Contacts Modal for Ambagan member emails */}
+      <ContactsModal
+        visible={showContactsModal}
+        onClose={() => setShowContactsModal(false)}
+        onSelectContact={handleSelectContact}
+        userId={user!.id}
+      />
     </Modal>
   );
 }
@@ -562,10 +603,10 @@ const makeStyles = (colors: ReturnType<typeof import('../../context/ThemeContext
     form: { flex: 1, paddingHorizontal: 20, paddingTop: 20 },
     fieldGroup: { marginBottom: 20 },
     fieldLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 8 },
-    input: { borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: colors.textPrimary, backgroundColor: colors.background },
+    input: { borderWidth: 1.5, borderColor: colors.border, borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 15, color: colors.textPrimary, backgroundColor: colors.surface },
     amountInput: { fontSize: 24, fontWeight: '700', borderColor: colors.primary, borderWidth: 2 },
     chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-    chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.background },
+    chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: colors.surface },
     chipText: { fontSize: 13, color: colors.textSecondary, fontWeight: '600' },
     saveBtn: { backgroundColor: colors.primary, borderRadius: 14, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, elevation: 4, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8 },
     saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
